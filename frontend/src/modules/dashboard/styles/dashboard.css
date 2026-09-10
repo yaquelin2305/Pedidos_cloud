@@ -1,0 +1,23 @@
+.identity-section { padding-bottom: var(--space-32); border-bottom: 1px solid var(--border); }
+.identity-heading { display: flex; align-items: center; gap: var(--space-16); margin-bottom: var(--space-24); }
+.identity-heading h2 { font-size: 1.125rem; }
+.identity-list { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-24) var(--space-32); max-width: 860px; }
+.identity-list > div { display: grid; align-content: start; gap: var(--space-8); }
+.identity-list dt { color: var(--text-muted); font-size: .8125rem; }
+.identity-list dd { overflow-wrap: anywhere; font-size: .9375rem; }
+.identity-role { display: inline-block; color: var(--primary); background: var(--primary-soft); font-size: .8125rem; font-weight: 600; padding: var(--space-4) var(--space-12); border-radius: var(--radius); }
+.scope-list { display: flex; flex-wrap: wrap; gap: var(--space-8); align-items: center; }
+.scope-list code { font-size: .75rem; color: var(--violet); background: var(--violet-bg); padding: var(--space-4) var(--space-8); border-radius: 4px; }
+.section-links { padding-top: var(--space-32); }
+.section-links h2 { margin-bottom: var(--space-24); font-size: 1.125rem; }
+.section-link-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-16); max-width: 860px; }
+.section-links a { display: flex; align-items: center; gap: var(--space-16); padding: var(--space-24); border: 1px solid var(--border); border-radius: var(--radius); font-weight: 600; background: var(--surface); color: var(--text); text-decoration: none; box-shadow: var(--shadow); }
+.section-links a:hover { border-color: var(--primary); background: var(--surface-hover); }
+.section-initial { display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: var(--radius); background: var(--primary-soft); color: var(--primary); font-size: 1rem; }
+.section-initial--catalog { background: var(--accent-soft); color: var(--accent); }
+.section-arrow { margin-left: auto; font-weight: 400; color: var(--primary); font-size: 1.25rem; }
+@media (max-width: 600px) {
+  .identity-list { grid-template-columns: 1fr; }
+  .section-link-list { grid-template-columns: 1fr; }
+  .section-links a { padding: var(--space-16); }
+}
