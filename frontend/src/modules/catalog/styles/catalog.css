@@ -1,0 +1,7 @@
+.product-name { display: block; min-width: 160px; max-width: 240px; overflow-wrap: anywhere; font-weight: 600; }
+.product-description { display: block; min-width: 160px; max-width: 260px; overflow-wrap: anywhere; color: var(--text-muted); line-height: 1.6; }
+.stock-display { display: flex; align-items: center; gap: var(--space-8); min-width: 132px; font-variant-numeric: tabular-nums; }
+.stock-display > span { min-width: 48px; font-weight: 600; }
+.stock-display .button { border-color: transparent; color: var(--text-muted); background: transparent; font-weight: 500; text-decoration: underline; text-underline-offset: 4px; }
+.stock-form { width: 180px; display: grid; gap: var(--space-8); }
+.stock-form input { width: 100px; }
