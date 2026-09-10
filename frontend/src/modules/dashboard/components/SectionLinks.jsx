@@ -8,7 +8,7 @@ export default function SectionLinks() {
       <h2 id="sections-title">Secciones</h2>
       <div className="section-link-list">
         <Link to="/orders"><span className="section-initial" aria-hidden="true">P</span><span>Pedidos</span><span className="section-arrow" aria-hidden="true">&rarr;</span></Link>
-        {hasAnyRole(['Admin', 'Operator']) && <Link to="/catalog"><span className="section-initial section-initial--catalog" aria-hidden="true">C</span><span>Catálogo</span><span className="section-arrow" aria-hidden="true">&rarr;</span></Link>}
+        {hasAnyRole(['Admin', 'Operator']) && <Link to="/catalog"><span className="section-initial" aria-hidden="true">C</span><span>Catálogo</span><span className="section-arrow" aria-hidden="true">&rarr;</span></Link>}
       </div>
     </section>
   )

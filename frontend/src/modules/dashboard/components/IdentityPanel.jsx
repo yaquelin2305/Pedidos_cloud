@@ -1,11 +1,10 @@
 import useAuth from '../../auth/hooks/useAuth'
-import Avatar from '../../../shared/components/Avatar'
 
 export default function IdentityPanel() {
   const { user, roles, scopes } = useAuth()
   return (
     <section className="identity-section" aria-labelledby="identity-title">
-      <div className="identity-heading"><Avatar name={user.name} size="large" /><h2 id="identity-title">Mi sesión</h2></div>
+      <div className="identity-heading"><h2 id="identity-title">Mi sesión</h2></div>
       <dl className="identity-list">
         <div><dt>Nombre</dt><dd>{user.name}</dd></div>
         <div><dt>Usuario</dt><dd>{user.username}</dd></div>

@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom'
 import RoleSelector from '../../modules/auth/components/RoleSelector'
 import LogoutButton from '../../modules/auth/components/LogoutButton'
-import Avatar from './Avatar'
 
 export default function Header({ user }) {
   return (
@@ -12,7 +11,7 @@ export default function Header({ user }) {
       </Link>
       <div className="header-actions">
         <RoleSelector />
-        <div className="header-identity"><Avatar name={user.name} /><span>{user.name}</span></div>
+        <div className="header-identity"><span>{user.name}</span></div>
         <LogoutButton />
       </div>
     </header>
