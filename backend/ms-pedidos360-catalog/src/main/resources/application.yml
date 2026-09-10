@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: ms-pedidos360-catalog
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:validate}
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI}
+          audiences: ${JWT_AUDIENCE}
+
+server:
+  port: ${SERVER_PORT:8082}
