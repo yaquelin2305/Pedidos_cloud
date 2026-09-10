@@ -1,0 +1,13 @@
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://test-issuer.pedidos360.local
+
+pedidos360:
+  jwt:
+    audience: api://pedidos360-test
+  clients:
+    orders-base-url: http://localhost:8081
+    catalog-base-url: http://localhost:8082
