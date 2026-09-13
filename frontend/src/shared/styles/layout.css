@@ -13,8 +13,6 @@
 .header-actions { display: flex; gap: var(--space-24); align-items: center; }
 .header-identity { display: flex; gap: var(--space-8); align-items: center; font-size: .8125rem; font-weight: 500; padding-left: var(--space-24); border-left: 1px solid var(--border); }
 .header-actions > .button { background: transparent; border-color: transparent; color: var(--text-muted); }
-.role-selector { display: flex; align-items: center; gap: var(--space-8); color: var(--text-muted); font-size: .75rem; }
-.role-selector select { width: 126px; min-height: 36px; padding-top: 6px; padding-bottom: 6px; font-size: .8125rem; background: var(--background); }
 .app-body { display: grid; grid-template-columns: 208px minmax(0, 1fr); min-height: calc(100dvh - 64px); }
 .sidebar {
   display: flex;

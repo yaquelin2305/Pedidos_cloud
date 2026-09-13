@@ -1,14 +1,25 @@
-import { useSyncExternalStore } from 'react'
-import { sessionStore } from '../session/sessionStore'
+import { InteractionStatus } from '@azure/msal-browser'
+import { useMsal } from '@azure/msal-react'
+import { loginRequest } from '../../../config/msalConfig'
 
 export default function useAuth() {
-  const session = useSyncExternalStore(sessionStore.subscribe, sessionStore.getSnapshot)
+  const { instance, accounts, inProgress } = useMsal()
+  const account = accounts[0] ?? null
+  const claims = account?.idTokenClaims ?? {}
+  const roles = Array.isArray(claims.roles) ? claims.roles : []
+
   return {
-    isAuthenticated: Boolean(session),
-    user: session?.user ?? null,
-    roles: session ? [session.role] : [],
-    scopes: session ? ['orders.read', 'orders.write', ...(session.role === 'Customer' ? [] : ['catalog.read', 'catalog.write'])] : [],
-    login: sessionStore.login,
-    logout: sessionStore.logout,
+    isAuthenticated: Boolean(account),
+    isInitializing: inProgress !== InteractionStatus.None && !account,
+    user: account
+      ? {
+          id: claims.oid ?? claims.sub ?? account.homeAccountId,
+          name: claims.name ?? account.name ?? '',
+          username: claims.preferred_username ?? claims.email ?? claims.emails?.[0] ?? '',
+        }
+      : null,
+    roles,
+    login: () => instance.loginRedirect(loginRequest),
+    logout: () => instance.logoutRedirect(),
   }
 }

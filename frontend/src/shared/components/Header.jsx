@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom'
-import RoleSelector from '../../modules/auth/components/RoleSelector'
 import LogoutButton from '../../modules/auth/components/LogoutButton'
 
 export default function Header({ user }) {
@@ -10,7 +9,6 @@ export default function Header({ user }) {
         <span>Pedidos<span className="brand-number">360</span></span>
       </Link>
       <div className="header-actions">
-        <RoleSelector />
         <div className="header-identity"><span>{user.name}</span></div>
         <LogoutButton />
       </div>

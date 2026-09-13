@@ -1,12 +1,11 @@
 import { useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Navigate } from 'react-router-dom'
 import useAuth from '../hooks/useAuth'
 import LoginButton from '../components/LoginButton'
 import '../styles/auth.css'
 
 export default function LoginPage() {
   const { isAuthenticated, login } = useAuth()
-  const navigate = useNavigate()
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
   if (isAuthenticated) return <Navigate to="/dashboard" replace />
@@ -14,8 +13,8 @@ export default function LoginPage() {
     setPending(true)
     setError('')
     try {
+      // Dispara el redirect hacia Azure; si resuelve sin error la pagina ya esta navegando.
       await login()
-      navigate('/auth/callback', { replace: true })
     } catch {
       setError('No se pudo iniciar sesión. Vuelve a intentarlo.')
       setPending(false)

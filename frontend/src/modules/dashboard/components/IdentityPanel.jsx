@@ -1,7 +1,9 @@
 import useAuth from '../../auth/hooks/useAuth'
+import useApiScopes from '../../auth/hooks/useApiScopes'
 
 export default function IdentityPanel() {
-  const { user, roles, scopes } = useAuth()
+  const { user, roles } = useAuth()
+  const scopes = useApiScopes()
   return (
     <section className="identity-section" aria-labelledby="identity-title">
       <div className="identity-heading"><h2 id="identity-title">Mi sesión</h2></div>

@@ -1,4 +1,4 @@
-import { requireSession } from '../../auth/session/sessionStore'
+import { requireSession } from '../../auth/session/requireSession'
 import { fixtureList, fixtureRequest, fixtureStore } from '../../../shared/utils/fixtureStore'
 import { getOrderActions, validateOrder } from '../models/order'
 
