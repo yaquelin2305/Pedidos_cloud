@@ -22,13 +22,13 @@ export const ordersService = {
     const errors = validateOrder(input)
     if (Object.keys(errors).length) throw new Error(Object.values(errors)[0])
     const items = input.items.map((item) => {
-      const product = fixtureStore.products.find((product) => product.id === item.productId)
+      const product = fixtureStore.products.find((product) => String(product.id) === String(item.productId))
       if (!product) throw new Error('Uno de los productos ya no está disponible.')
       return { productId: product.id, productName: product.name, quantity: Number(item.quantity), unitPrice: product.price }
     })
     const order = {
       id: `ORD-${crypto.randomUUID().slice(0, 8)}`,
-      customerName: session.role === 'Customer' ? session.user.name : input.customerName.trim(),
+      customerName: session.user.name,
       status: 'CREATED', createdAt: new Date().toISOString(), items,
       total: items.reduce((total, item) => total + item.quantity * item.unitPrice, 0),
     }

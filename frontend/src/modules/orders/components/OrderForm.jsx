@@ -3,21 +3,17 @@ import Button from '../../../shared/components/Button'
 import Field from '../../../shared/components/Field'
 import StatusMessage from '../../../shared/components/StatusMessage'
 import { formatMoney } from '../../../shared/utils/format'
-import useAuth from '../../auth/hooks/useAuth'
 import useOrderProducts from '../hooks/useOrderProducts'
 import { validateOrder } from '../models/order'
 
 export default function OrderForm({ onSave, onCancel, pending }) {
-  const { user, roles } = useAuth()
   const { products, loading, error, reload } = useOrderProducts()
-  const [customerName, setCustomerName] = useState(user.name)
   const [items, setItems] = useState([{ key: 0, productId: '', quantity: '1' }])
   const nextKey = useRef(1)
   const form = useRef(null)
   const [errors, setErrors] = useState({})
   const [saveError, setSaveError] = useState('')
-  const isCustomer = roles.includes('Customer')
-  const total = items.reduce((sum, item) => sum + (products.find((product) => product.id === item.productId)?.price ?? 0) * (Number(item.quantity) || 0), 0)
+  const total = items.reduce((sum, item) => sum + (products.find((product) => String(product.id) === String(item.productId))?.price ?? 0) * (Number(item.quantity) || 0), 0)
   function changeItem(key, field, value) {
     setItems((previous) => previous.map((item) => item.key === key ? { ...item, [field]: value } : item))
     setErrors((previous) => ({ ...previous, items: '' }))
@@ -25,12 +21,12 @@ export default function OrderForm({ onSave, onCancel, pending }) {
   async function submit(event) {
     event.preventDefault()
     if (pending || loading || error) return
-    const input = { customerName, items: items.map(({ productId, quantity }) => ({ productId, quantity: Number(quantity) })) }
+    const input = { items: items.map(({ productId, quantity }) => ({ productId, quantity: Number(quantity) })) }
     const nextErrors = validateOrder(input)
     setErrors(nextErrors)
     setSaveError('')
     if (Object.keys(nextErrors).length) {
-      form.current.querySelector(nextErrors.customerName ? '#order-customer' : 'select')?.focus()
+      form.current.querySelector('select')?.focus()
       return
     }
     try { await onSave(input) } catch (failure) { setSaveError(failure.message) }
@@ -40,16 +36,13 @@ export default function OrderForm({ onSave, onCancel, pending }) {
       <h2 id="order-form-title">Nuevo pedido</h2>
       {loading ? <StatusMessage type="loading" message="Cargando productos..." /> : error ? <StatusMessage type="error" message={error} onRetry={reload} /> : products.length === 0 ? <StatusMessage message="No hay productos disponibles para crear un pedido." /> :
         <form ref={form} className="form-stack" onSubmit={submit} noValidate aria-busy={pending}>
-          <Field id="order-customer" label="Cliente" error={errors.customerName}>
-            <input id="order-customer" value={customerName} onChange={(event) => setCustomerName(event.target.value)} readOnly={isCustomer} disabled={pending} autoFocus required aria-invalid={Boolean(errors.customerName)} aria-describedby={errors.customerName ? 'order-customer-error' : undefined} />
-          </Field>
           <fieldset className="order-items" aria-describedby={errors.items ? 'order-items-error' : undefined}>
             <legend>Productos</legend>
             {items.map((item, index) => <div className="order-item" key={item.key}>
               <Field id={`order-product-${item.key}`} label={`Producto ${index + 1}`}>
                 <select id={`order-product-${item.key}`} value={item.productId} onChange={(event) => changeItem(item.key, 'productId', event.target.value)} disabled={pending} required aria-invalid={Boolean(errors.items)} aria-describedby={errors.items ? 'order-items-error' : undefined}>
                   <option value="">Seleccionar producto</option>
-                  {products.map((product) => <option key={product.id} value={product.id} disabled={items.some((other) => other.key !== item.key && other.productId === product.id)}>{product.name} - {formatMoney(product.price)}{product.stock === 0 ? ' (sin stock)' : ''}</option>)}
+                  {products.map((product) => <option key={product.id} value={product.id} disabled={items.some((other) => other.key !== item.key && String(product.id) === String(other.productId))}>{product.name} - {formatMoney(product.price)}{product.stock === 0 ? ' (sin stock)' : ''}</option>)}
                 </select>
               </Field>
               <div className="item-quantity">

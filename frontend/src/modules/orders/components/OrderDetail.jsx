@@ -14,7 +14,7 @@ export default function OrderDetail({ id, revision, onClose }) {
     { key: 'productName', label: 'Producto' },
     { key: 'quantity', label: 'Cantidad' },
     { key: 'unitPrice', label: 'Precio unitario', render: (item) => formatMoney(item.unitPrice) },
-    { key: 'subtotal', label: 'Subtotal', render: (item) => formatMoney(item.quantity * item.unitPrice) },
+    { key: 'subtotal', label: 'Subtotal', render: (item) => formatMoney(item.subtotal ?? item.quantity * item.unitPrice) },
   ]
   return (
     <section className="order-detail" aria-labelledby="order-detail-title">

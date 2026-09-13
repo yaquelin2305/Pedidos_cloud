@@ -27,13 +27,20 @@ test('Admin y Operator tienen las mismas transiciones operativas', () => {
   assert.deepEqual(getOrderActions('CREATED', []), [])
 })
 
-test('el pedido exige cliente, productos distintos y cantidades enteras positivas', () => {
-  const valid = { customerName: 'Camila Torres', items: [{ productId: 'P-001', quantity: 2 }] }
+test('el pedido solo exige productos distintos y cantidades enteras positivas', () => {
+  const valid = { items: [{ productId: 'P-001', quantity: 2 }] }
   assert.deepEqual(validateOrder(valid), {})
-  assert.ok(validateOrder({ ...valid, customerName: '  ' }).customerName)
   assert.ok(validateOrder({ ...valid, items: [] }).items)
   assert.ok(validateOrder({ ...valid, items: [...valid.items, ...valid.items] }).items)
   for (const quantity of [0, -1, 1.5, Infinity, NaN, Number.MAX_SAFE_INTEGER + 1]) {
     assert.ok(validateOrder({ ...valid, items: [{ productId: 'P-001', quantity }] }).items)
   }
+})
+
+test('normaliza los ids al detectar productos duplicados', () => {
+  assert.deepEqual(validateOrder({ items: [{ productId: 10, quantity: 1 }] }), {})
+  assert.ok(validateOrder({ items: [
+    { productId: 10, quantity: 1 },
+    { productId: '10', quantity: 2 },
+  ] }).items)
 })

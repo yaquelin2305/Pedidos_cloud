@@ -17,9 +17,8 @@ export function getOrderActions(status, roles, isOwner = false) {
 
 export function validateOrder(input) {
   const errors = {}
-  if (!input.customerName?.trim()) errors.customerName = 'Ingresa el nombre del cliente.'
   if (!input.items?.length) errors.items = 'Agrega al menos un producto.'
   else if (input.items.some((item) => !item.productId || !Number.isSafeInteger(Number(item.quantity)) || Number(item.quantity) <= 0)) errors.items = 'Selecciona productos con cantidades enteras mayores que cero.'
-  else if (new Set(input.items.map((item) => item.productId)).size !== input.items.length) errors.items = 'Cada producto debe aparecer una sola vez.'
+  else if (new Set(input.items.map((item) => String(item.productId))).size !== input.items.length) errors.items = 'Cada producto debe aparecer una sola vez.'
   return errors
 }
