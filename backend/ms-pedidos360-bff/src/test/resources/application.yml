@@ -11,3 +11,5 @@ pedidos360:
   clients:
     orders-base-url: http://localhost:8081
     catalog-base-url: http://localhost:8082
+  cors:
+    allowed-origins: http://localhost:5173
