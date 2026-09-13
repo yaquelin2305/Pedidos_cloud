@@ -64,6 +64,28 @@ class ProductServiceImplTest {
     }
 
     @Test
+    void autogeneraElSkuCuandoVieneVacio() {
+        ProductRequestDTO request = new ProductRequestDTO("", "Teclado", "Teclado mecanico",
+                BigDecimal.valueOf(50), 20, "Perifericos");
+        when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ProductResponseDTO response = productService.create(request);
+
+        assertThat(response.sku()).isNotBlank();
+    }
+
+    @Test
+    void ajustaElStockAlValorAbsolutoRecibido() {
+        Product product = activeProduct(1L, 10);
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ProductResponseDTO response = productService.updateStock(1L, 50);
+
+        assertThat(response.stock()).isEqualTo(50);
+    }
+
+    @Test
     void lanzaExcepcionSiElProductoNoExiste() {
         when(productRepository.findById(99L)).thenReturn(Optional.empty());
 

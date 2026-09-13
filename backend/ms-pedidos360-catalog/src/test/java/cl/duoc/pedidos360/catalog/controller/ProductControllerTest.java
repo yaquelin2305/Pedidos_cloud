@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -96,6 +97,32 @@ class ProductControllerTest {
                         .content("""
                                 {"sku":"SKU-1","name":"Mouse","description":"Mouse optico",
                                  "price":15,"stock":30,"category":"Perifericos"}
+                                """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void ajustarStockConRolOperatorRespondeOk() throws Exception {
+        ProductResponseDTO response = new ProductResponseDTO(1L, "SKU-1", "Mouse", "Mouse optico",
+                BigDecimal.valueOf(15), 50, "Perifericos", true, null, null);
+        when(productService.updateStock(eq(1L), eq(50))).thenReturn(response);
+
+        mockMvc.perform(patch("/api/catalog/products/1/stock")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_Operator")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"stock":50}
+                                """))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void ajustarStockConRolInsuficienteRespondeProhibido() throws Exception {
+        mockMvc.perform(patch("/api/catalog/products/1/stock")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_Customer")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"stock":50}
                                 """))
                 .andExpect(status().isForbidden());
     }

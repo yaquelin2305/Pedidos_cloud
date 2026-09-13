@@ -19,4 +19,6 @@ public interface ProductService {
     void deactivate(Long id);
 
     ProductResponseDTO decreaseStock(Long id, int quantity);
+
+    ProductResponseDTO updateStock(Long id, int newStock);
 }

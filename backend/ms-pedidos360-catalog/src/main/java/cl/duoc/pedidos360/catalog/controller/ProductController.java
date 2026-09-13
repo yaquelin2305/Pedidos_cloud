@@ -17,14 +17,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import lombok.RequiredArgsConstructor;
 
 import cl.duoc.pedidos360.catalog.dto.ProductRequestDTO;
 import cl.duoc.pedidos360.catalog.dto.ProductResponseDTO;
 import cl.duoc.pedidos360.catalog.dto.StockAdjustmentDTO;
+import cl.duoc.pedidos360.catalog.dto.StockUpdateDTO;
 import cl.duoc.pedidos360.catalog.service.ProductService;
 
 /**
@@ -33,7 +31,6 @@ import cl.duoc.pedidos360.catalog.service.ProductService;
 @RestController
 @RequestMapping("/api/catalog/products")
 @RequiredArgsConstructor
-@Tag(name = "Products", description = "Gestion de productos y stock del catalogo")
 public class ProductController {
 
     private final ProductService productService;
@@ -78,12 +75,23 @@ public class ProductController {
      * (client credentials u otro) se define junto con ms-pedidos360-orders.
      */
     @PatchMapping("/{id}/stock/decrease")
-    @Operation(summary = "Descuenta stock (uso interno desde ms-pedidos360-orders)")
     public ResponseEntity<ProductResponseDTO> decreaseStock(@PathVariable Long id,
             @Valid @RequestBody StockAdjustmentDTO adjustment) {
         if (adjustment.productId() != null && !adjustment.productId().equals(id)) {
             return ResponseEntity.badRequest().build();
         }
         return ResponseEntity.ok(productService.decreaseStock(id, adjustment.quantity()));
+    }
+
+    /**
+     * Ajuste manual de stock desde la tabla del front (Admin/Operator), distinto del descuento
+     * interno de {@code /stock/decrease}: aqui el body trae el valor absoluto final, no una
+     * cantidad a restar.
+     */
+    @PatchMapping("/{id}/stock")
+    @PreAuthorize("hasAnyRole('Admin', 'Operator')")
+    public ResponseEntity<ProductResponseDTO> updateStock(@PathVariable Long id,
+            @Valid @RequestBody StockUpdateDTO update) {
+        return ResponseEntity.ok(productService.updateStock(id, update.stock()));
     }
 }
