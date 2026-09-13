@@ -22,12 +22,6 @@ import cl.duoc.pedidos360.orders.exception.RestAuthenticationEntryPoint;
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    private static final String[] PUBLIC_PATHS = {
-            "/swagger-ui/**",
-            "/swagger-ui.html",
-            "/v3/api-docs/**"
-    };
-
     @Bean
     SecurityFilterChain filterChain(HttpSecurity http, ObjectMapper objectMapper) throws Exception {
         RestAuthenticationEntryPoint entryPoint = new RestAuthenticationEntryPoint(objectMapper);
@@ -35,7 +29,6 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(PUBLIC_PATHS).permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .authenticationEntryPoint(entryPoint)
