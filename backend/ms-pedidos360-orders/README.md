@@ -12,7 +12,7 @@ resolverlo con el docente.
 |---|---|---|
 | GET | `/api/orders` | Admin, Operator, Customer (Customer ve solo sus propios pedidos) |
 | GET | `/api/orders/{id}` | Admin, Operator, Customer (Customer solo si es el dueño) |
-| POST | `/api/orders` | Customer, Operator |
+| POST | `/api/orders` | Customer, Operator, Admin |
 | PATCH | `/api/orders/{id}/status` | Operator, Admin |
 | DELETE | `/api/orders/{id}` (cancela) | Customer (solo desde CREADO), Operator, Admin (desde CREADO o ACEPTADO) |
 
@@ -34,6 +34,9 @@ anterior.
 La URL de `ms-pedidos360-catalog` se configura con `CATALOG_SERVICE_URL`. Las llamadas salientes
 reenvían el mismo JWT recibido en la petición original, para que catalog aplique su propia
 validación de seguridad.
+
+El nombre del cliente (`customerName`) se toma del claim `name` del JWT al crear el pedido y
+queda guardado junto al `customerId`, para que el front lo muestre en la tabla de pedidos.
 
 ## Cómo levantarlo
 
@@ -58,10 +61,7 @@ mvn spring-boot:run
 
 8081
 
-## Pendiente (fuera de alcance en esta etapa)
+## Pendiente
 
-`OrderEventPublisher` deja preparado el punto de extensión para publicar el cambio de estado del
-pedido al topic Kafka `orders.events` y encolar la notificación en RabbitMQ (`q.cmd.email`) cuando
-esa infraestructura esté disponible. Por ahora solo registra el evento en el log
-(`LoggingOrderEventPublisher`). Tampoco existe compensación automática si el descuento de stock
-falla a mitad de un pedido con varias líneas (ver comentario en `OrderServiceImpl.changeStatus`).
+No existe compensación automática si el descuento de stock falla a mitad de un pedido con varias
+líneas (ver comentario en `OrderServiceImpl.changeStatus`).
