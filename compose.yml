@@ -3,7 +3,7 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_API_BASE_URL: /
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:?Define VITE_API_BASE_URL}
         VITE_API_SCOPE: ${VITE_API_SCOPE:?Define VITE_API_SCOPE}
         VITE_AZURE_CLIENT_ID: ${VITE_AZURE_CLIENT_ID:?Define VITE_AZURE_CLIENT_ID}
         VITE_AZURE_AUTHORITY: ${VITE_AZURE_AUTHORITY:?Define VITE_AZURE_AUTHORITY}
