@@ -11,7 +11,10 @@ services:
         VITE_AZURE_REDIRECT_URI: ${VITE_AZURE_REDIRECT_URI:?Define VITE_AZURE_REDIRECT_URI}
         VITE_AZURE_POST_LOGOUT_REDIRECT_URI: ${VITE_AZURE_POST_LOGOUT_REDIRECT_URI:?Define VITE_AZURE_POST_LOGOUT_REDIRECT_URI}
     ports:
-      - "5173:80"
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       - bff
 

@@ -39,9 +39,8 @@ docker compose --env-file frontend/.env --env-file .env logs -f
 docker compose --env-file frontend/.env --env-file .env down
 ```
 
-El frontend queda en `http://localhost:5173`. Detén el servidor Vite si está usando ese
-puerto. En Azure, los retornos locales deben coincidir con
-`http://localhost:5173/auth/callback` y `http://localhost:5173/login`.
+El frontend queda en `http://localhost` (puerto 80). En Azure, los retornos locales deben
+coincidir con `http://localhost/auth/callback` y `http://localhost/login`.
 
 Nginx sirve el build de React y reenvía `/api/*` y `/me` al BFF. En Compose se fija
 `VITE_API_BASE_URL=/` para usar el mismo origen, sin cambiar el `.env` del frontend.

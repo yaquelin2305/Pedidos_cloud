@@ -1,0 +1,59 @@
+name: Desplegar en EC2
+
+on:
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generar archivos de entorno
+        run: |
+          cat > .env <<EOF
+          JWT_ISSUER_URI=${{ secrets.JWT_ISSUER_URI }}
+          JWT_AUDIENCE=${{ secrets.JWT_AUDIENCE }}
+          DB_URL=${{ secrets.DB_URL }}
+          DB_USERNAME=${{ secrets.DB_USERNAME }}
+          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+          EOF
+          cat > frontend/.env <<EOF
+          VITE_API_SCOPE=${{ secrets.VITE_API_SCOPE }}
+          VITE_AZURE_CLIENT_ID=${{ secrets.VITE_AZURE_CLIENT_ID }}
+          VITE_AZURE_AUTHORITY=${{ secrets.VITE_AZURE_AUTHORITY }}
+          VITE_AZURE_KNOWN_AUTHORITY=${{ secrets.VITE_AZURE_KNOWN_AUTHORITY }}
+          VITE_AZURE_REDIRECT_URI=${{ secrets.VITE_AZURE_REDIRECT_URI }}
+          VITE_AZURE_POST_LOGOUT_REDIRECT_URI=${{ secrets.VITE_AZURE_POST_LOGOUT_REDIRECT_URI }}
+          EOF
+
+      - name: Copiar el repo a la EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "."
+          target: "~/pedidos360"
+          rm: true
+
+      - name: Certificado HTTPS y Docker Compose
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            which docker || (sudo dnf install -y docker && sudo systemctl enable --now docker && sudo usermod -aG docker $USER)
+            sudo docker compose version || sudo dnf install -y docker-compose-plugin
+            cd ~/pedidos360
+            DOMAIN=52.207.140.106.nip.io
+            if [ ! -d /etc/letsencrypt/live/$DOMAIN ]; then
+              which certbot || sudo dnf install -y certbot
+              sudo docker compose --env-file frontend/.env --env-file .env down 2>/dev/null || true
+              sudo certbot certonly --standalone -d $DOMAIN --non-interactive --agree-tos \
+                -m ${{ secrets.LETSENCRYPT_EMAIL }}
+            fi
+            sudo docker compose --env-file frontend/.env --env-file .env up --build -d
