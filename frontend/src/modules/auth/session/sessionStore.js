@@ -25,7 +25,6 @@ export const sessionStore = {
   subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener) },
   getSnapshot: () => session,
   login: async () => publish({ user: identity, role: 'Admin' }),
-  register: async () => publish({ user: identity, role: 'Customer' }),
   logout: () => publish(null),
   setRole(role) {
     if (session && availableRoles.includes(role)) publish({ ...session, role })

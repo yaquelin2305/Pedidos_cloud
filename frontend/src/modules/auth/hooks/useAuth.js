@@ -9,7 +9,6 @@ export default function useAuth() {
     roles: session ? [session.role] : [],
     scopes: session ? ['orders.read', 'orders.write', ...(session.role === 'Customer' ? [] : ['catalog.read', 'catalog.write'])] : [],
     login: sessionStore.login,
-    register: sessionStore.register,
     logout: sessionStore.logout,
   }
 }
