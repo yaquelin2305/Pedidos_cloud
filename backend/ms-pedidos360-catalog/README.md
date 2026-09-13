@@ -12,13 +12,13 @@ resolverlo con el docente. El código de entidades y repositorios es agnóstico 
 |---|---|---|---|
 | GET | `/api/catalog/products` | Admin, Operator, Customer | Lista productos activos (paginado) |
 | GET | `/api/catalog/products/{id}` | Admin, Operator, Customer | Obtiene un producto |
-| POST | `/api/catalog/products` | Admin | Crea un producto |
+| POST | `/api/catalog/products` | Admin | Crea un producto. `sku` es opcional: si viene vacío, se autogenera |
 | PUT | `/api/catalog/products/{id}` | Admin | Actualiza un producto |
 | DELETE | `/api/catalog/products/{id}` | Admin | Desactiva un producto (borrado lógico) |
 | PATCH | `/api/catalog/products/{id}/stock/decrease` | Cualquier JWT válido | Descuenta stock. Uso interno desde `ms-pedidos360-orders` al aceptar un pedido, no lo invoca el cliente final |
+| PATCH | `/api/catalog/products/{id}/stock` | Admin, Operator | Ajusta el stock al valor absoluto recibido, desde la tabla del front |
 
-Todas las rutas exigen un JWT válido emitido por el IDaaS (Azure Entra). Documentación interactiva en
-`/swagger-ui.html` (público, sin requerir token para explorar el contrato).
+Todas las rutas exigen un JWT válido emitido por el IDaaS (Azure Entra).
 
 ## Decisiones de diseño
 
