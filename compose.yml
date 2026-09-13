@@ -26,6 +26,7 @@ services:
       JWT_AUDIENCE: ${JWT_AUDIENCE:?Define JWT_AUDIENCE}
       ORDERS_BASE_URL: http://orders:8081
       CATALOG_BASE_URL: http://catalog:8082
+      CORS_ALLOWED_ORIGINS: https://52.207.140.106.nip.io
     depends_on:
       - orders
       - catalog
