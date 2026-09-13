@@ -1,0 +1,51 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: /
+        VITE_API_SCOPE: ${VITE_API_SCOPE:?Define VITE_API_SCOPE}
+        VITE_AZURE_CLIENT_ID: ${VITE_AZURE_CLIENT_ID:?Define VITE_AZURE_CLIENT_ID}
+        VITE_AZURE_AUTHORITY: ${VITE_AZURE_AUTHORITY:?Define VITE_AZURE_AUTHORITY}
+        VITE_AZURE_KNOWN_AUTHORITY: ${VITE_AZURE_KNOWN_AUTHORITY:-}
+        VITE_AZURE_REDIRECT_URI: ${VITE_AZURE_REDIRECT_URI:?Define VITE_AZURE_REDIRECT_URI}
+        VITE_AZURE_POST_LOGOUT_REDIRECT_URI: ${VITE_AZURE_POST_LOGOUT_REDIRECT_URI:?Define VITE_AZURE_POST_LOGOUT_REDIRECT_URI}
+    ports:
+      - "5173:80"
+    depends_on:
+      - bff
+
+  bff:
+    build: ./backend/ms-pedidos360-bff
+    environment:
+      SERVER_PORT: 8080
+      JWT_ISSUER_URI: ${JWT_ISSUER_URI:?Define JWT_ISSUER_URI}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:?Define JWT_AUDIENCE}
+      ORDERS_BASE_URL: http://orders:8081
+      CATALOG_BASE_URL: http://catalog:8082
+    depends_on:
+      - orders
+      - catalog
+
+  orders:
+    build: ./backend/ms-pedidos360-orders
+    environment:
+      SERVER_PORT: 8081
+      JWT_ISSUER_URI: ${JWT_ISSUER_URI:?Define JWT_ISSUER_URI}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:?Define JWT_AUDIENCE}
+      DB_URL: ${DB_URL:?Define DB_URL}
+      DB_USERNAME: ${DB_USERNAME:?Define DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD}
+      CATALOG_SERVICE_URL: http://catalog:8082
+    depends_on:
+      - catalog
+
+  catalog:
+    build: ./backend/ms-pedidos360-catalog
+    environment:
+      SERVER_PORT: 8082
+      JWT_ISSUER_URI: ${JWT_ISSUER_URI:?Define JWT_ISSUER_URI}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:?Define JWT_AUDIENCE}
+      DB_URL: ${DB_URL:?Define DB_URL}
+      DB_USERNAME: ${DB_USERNAME:?Define DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD}
