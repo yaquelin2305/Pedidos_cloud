@@ -15,11 +15,11 @@ microservicios de backend.
 Java 21 + Spring Boot 3.5, React 18 + Vite 5, AWS API Gateway (HTTP API) como API Manager y Azure
 Entra como IDaaS.
 
-## Pendiente
+## Base de datos
 
-El motor de base de datos cloud está por definir con el docente: Oracle Autonomous en OCI, Oracle XE
-en contenedor, o PostgreSQL/MySQL en RDS. Hasta resolverlo, `orders` y `catalog` no declaran driver
-JDBC.
+PostgreSQL en Amazon RDS (Learner Lab). `orders` y `catalog` comparten una sola base
+(`orders_db`) — no hay aislamiento de esquema entre servicios porque sus tablas no
+tienen nombres en conflicto y la rúbrica no exige base de datos por servicio.
 
 ## Docker Compose
 
@@ -29,8 +29,7 @@ de los microservicios; no incorpora una base de datos ni otros servicios.
 Requiere Docker con Compose, las variables de Azure en `frontend/.env` y las del backend
 en `.env` de la raíz, siguiendo `.env.example`. Ambos archivos son locales. La base de
 datos debe ser accesible desde los contenedores y tener las tablas creadas: se conserva
-`ddl-auto=validate`. Antes de levantar orders/catalog falta incorporar el driver JDBC
-del motor que acuerde el equipo.
+`ddl-auto=validate`.
 
 Desde la raíz:
 
