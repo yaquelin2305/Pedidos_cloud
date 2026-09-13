@@ -47,7 +47,10 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             which docker || (sudo dnf install -y docker && sudo systemctl enable --now docker && sudo usermod -aG docker $USER)
-            sudo docker compose version || sudo dnf install -y docker-compose-plugin
+            sudo docker compose version || (sudo mkdir -p /usr/local/lib/docker/cli-plugins && \
+              sudo curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 \
+              -o /usr/local/lib/docker/cli-plugins/docker-compose && \
+              sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose)
             cd ~/pedidos360
             DOMAIN=52.207.140.106.nip.io
             if [ ! -d /etc/letsencrypt/live/$DOMAIN ]; then
