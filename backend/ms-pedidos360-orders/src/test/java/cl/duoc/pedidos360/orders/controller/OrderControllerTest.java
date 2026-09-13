@@ -59,7 +59,7 @@ class OrderControllerTest {
 
     private OrderResponseDTO sampleOrder() {
         OrderItemDTO item = new OrderItemDTO(10L, "Teclado", 2, BigDecimal.valueOf(50), BigDecimal.valueOf(100));
-        return new OrderResponseDTO(1L, "customer-1", OrderStatus.CREADO, BigDecimal.valueOf(100),
+        return new OrderResponseDTO(1L, "customer-1", "Ana Torres", OrderStatus.CREADO, BigDecimal.valueOf(100),
                 null, null, null, null, List.of(item));
     }
 
@@ -84,6 +84,19 @@ class OrderControllerTest {
 
         mockMvc.perform(post("/api/orders")
                         .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_Customer")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"items":[{"productId":10,"quantity":2}]}
+                                """))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void crearPedidoConRolAdminRespondeCreado() throws Exception {
+        when(orderService.create(any(), any())).thenReturn(sampleOrder());
+
+        mockMvc.perform(post("/api/orders")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_Admin")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"items":[{"productId":10,"quantity":2}]}

@@ -34,7 +34,6 @@ public class OrderServiceImpl implements OrderService {
 
     private final OrderRepository orderRepository;
     private final CatalogClient catalogClient;
-    private final OrderEventPublisher eventPublisher;
 
     @Override
     @Transactional(readOnly = true)
@@ -56,6 +55,7 @@ public class OrderServiceImpl implements OrderService {
     public OrderResponseDTO create(OrderRequestDTO request, OrderRequester requester) {
         Order order = Order.builder()
                 .customerId(requester.customerId())
+                .customerName(requester.customerName())
                 .status(OrderStatus.CREADO)
                 .totalAmount(BigDecimal.ZERO)
                 .build();
@@ -88,15 +88,13 @@ public class OrderServiceImpl implements OrderService {
      * Limitacion conocida: el descuento se hace linea por linea contra un servicio externo. Si
      * la linea 2 falla despues de que la linea 1 ya descarto stock en catalog, ese descuento
      * previo no se revierte aqui (no existe un endpoint de reversion en catalog ni una saga que
-     * lo coordine). Corregir esto queda para cuando se integre el broker de eventos: catalog
-     * podria compensar el stock al recibir un evento de pedido fallido en orders.events.
+     * lo coordine).
      */
     @Override
     @Transactional
     public OrderResponseDTO changeStatus(Long id, OrderStatus newStatus, OrderRequester requester) {
         Order order = findWithOwnershipCheck(id, requester);
-        OrderStatus previousStatus = order.getStatus();
-        OrderStatusValidator.validateTransition(previousStatus, newStatus);
+        OrderStatusValidator.validateTransition(order.getStatus(), newStatus);
 
         if (newStatus == OrderStatus.ACEPTADO) {
             for (OrderItem item : order.getItems()) {
@@ -110,9 +108,7 @@ public class OrderServiceImpl implements OrderService {
         }
 
         order.setStatus(newStatus);
-        Order saved = orderRepository.save(order);
-        eventPublisher.publishStatusChanged(saved, previousStatus);
-        return OrderResponseDTO.from(saved);
+        return OrderResponseDTO.from(orderRepository.save(order));
     }
 
     @Override
@@ -125,9 +121,7 @@ public class OrderServiceImpl implements OrderService {
             throw new InvalidOrderStatusTransitionException(previousStatus, OrderStatus.CANCELADO);
         }
         order.setStatus(OrderStatus.CANCELADO);
-        Order saved = orderRepository.save(order);
-        eventPublisher.publishStatusChanged(saved, previousStatus);
-        return OrderResponseDTO.from(saved);
+        return OrderResponseDTO.from(orderRepository.save(order));
     }
 
     private Order findWithOwnershipCheck(Long id, OrderRequester requester) {

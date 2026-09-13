@@ -20,8 +20,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import io.swagger.v3.oas.annotations.tags.Tag;
-
 import lombok.RequiredArgsConstructor;
 
 import cl.duoc.pedidos360.orders.dto.OrderRequestDTO;
@@ -38,7 +36,6 @@ import cl.duoc.pedidos360.orders.service.OrderService;
 @RestController
 @RequestMapping("/api/orders")
 @RequiredArgsConstructor
-@Tag(name = "Orders", description = "Gestion de pedidos y su ciclo de estados")
 public class OrderController {
 
     private final OrderService orderService;
@@ -56,7 +53,7 @@ public class OrderController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('Customer', 'Operator')")
+    @PreAuthorize("hasAnyRole('Customer', 'Operator', 'Admin')")
     public ResponseEntity<OrderResponseDTO> create(@Valid @RequestBody OrderRequestDTO request,
             JwtAuthenticationToken auth) {
         OrderResponseDTO created = orderService.create(request, requesterOf(auth));
@@ -78,7 +75,7 @@ public class OrderController {
 
     private OrderRequester requesterOf(JwtAuthenticationToken auth) {
         Jwt jwt = auth.getToken();
-        return new OrderRequester(jwt.getSubject(), isPrivileged(auth));
+        return new OrderRequester(jwt.getSubject(), jwt.getClaimAsString("name"), isPrivileged(auth));
     }
 
     private boolean isPrivileged(Authentication authentication) {

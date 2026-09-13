@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -33,9 +32,9 @@ import cl.duoc.pedidos360.orders.repository.OrderRepository;
 @ExtendWith(MockitoExtension.class)
 class OrderServiceImplTest {
 
-    private static final OrderRequester CUSTOMER = new OrderRequester("customer-1", false);
-    private static final OrderRequester OTHER_CUSTOMER = new OrderRequester("customer-2", false);
-    private static final OrderRequester OPERATOR = new OrderRequester("operator-1", true);
+    private static final OrderRequester CUSTOMER = new OrderRequester("customer-1", "Ana Torres", false);
+    private static final OrderRequester OTHER_CUSTOMER = new OrderRequester("customer-2", "Luis Soto", false);
+    private static final OrderRequester OPERATOR = new OrderRequester("operator-1", "Operador Uno", true);
 
     @Mock
     private OrderRepository orderRepository;
@@ -43,14 +42,11 @@ class OrderServiceImplTest {
     @Mock
     private CatalogClient catalogClient;
 
-    @Mock
-    private OrderEventPublisher eventPublisher;
-
     private OrderServiceImpl orderService;
 
     @BeforeEach
     void setUp() {
-        orderService = new OrderServiceImpl(orderRepository, catalogClient, eventPublisher);
+        orderService = new OrderServiceImpl(orderRepository, catalogClient);
     }
 
     private Order order(Long id, String customerId, OrderStatus status) {
@@ -84,6 +80,7 @@ class OrderServiceImplTest {
 
         OrderResponseDTO response = orderService.create(request, CUSTOMER);
 
+        assertThat(response.customerName()).isEqualTo("Ana Torres");
         assertThat(response.status()).isEqualTo(OrderStatus.CREADO);
         assertThat(response.totalAmount()).isEqualByComparingTo(BigDecimal.valueOf(100));
         assertThat(response.items()).hasSize(1);
@@ -100,7 +97,6 @@ class OrderServiceImplTest {
 
         assertThat(response.status()).isEqualTo(OrderStatus.ACEPTADO);
         verify(catalogClient).decreaseStock(10L, 2);
-        verify(eventPublisher).publishStatusChanged(any(Order.class), eq(OrderStatus.CREADO));
     }
 
     @Test
