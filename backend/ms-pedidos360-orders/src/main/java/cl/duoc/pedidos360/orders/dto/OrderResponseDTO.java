@@ -14,6 +14,7 @@ import cl.duoc.pedidos360.orders.entity.OrderStatus;
 public record OrderResponseDTO(
         Long id,
         String customerId,
+        String customerName,
         OrderStatus status,
         BigDecimal totalAmount,
         Instant createdAt,
@@ -26,6 +27,7 @@ public record OrderResponseDTO(
         return new OrderResponseDTO(
                 order.getId(),
                 order.getCustomerId(),
+                order.getCustomerName(),
                 order.getStatus(),
                 order.getTotalAmount(),
                 order.getCreatedAt(),
