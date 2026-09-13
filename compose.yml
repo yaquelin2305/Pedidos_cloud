@@ -39,6 +39,7 @@ services:
       DB_URL: ${DB_URL:?Define DB_URL}
       DB_USERNAME: ${DB_USERNAME:?Define DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD}
+      JPA_DDL_AUTO: update
       CATALOG_SERVICE_URL: http://catalog:8082
     depends_on:
       - catalog
@@ -52,3 +53,4 @@ services:
       DB_URL: ${DB_URL:?Define DB_URL}
       DB_USERNAME: ${DB_USERNAME:?Define DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD}
+      JPA_DDL_AUTO: update
