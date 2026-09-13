@@ -1,56 +1,81 @@
-import { requireSession } from '../../auth/session/requireSession'
-import { fixtureList, fixtureRequest, fixtureStore } from '../../../shared/utils/fixtureStore'
-import { getOrderActions, validateOrder } from '../models/order'
+import apiClient from '../../../shared/http/apiClient'
+import { getHttpErrorMessage } from '../../../shared/utils/httpError'
+import { validateOrder } from '../models/order'
 
-function findOrder(id, session) {
-  const order = fixtureStore.orders.find((item) => item.id === id)
-  if (!order) throw new Error('El pedido no existe.')
-  if (session.role === 'Customer' && fixtureStore.owners[id] !== session.user.id) throw new Error('No tienes acceso a este pedido.')
-  return order
+// El backend guarda los estados en español; las vistas y el modelo de transiciones usan
+// ingles. Esta es la unica frontera donde se traduce en los dos sentidos.
+const STATUS_TO_BACKEND = {
+  CREATED: 'CREADO',
+  ACCEPTED: 'ACEPTADO',
+  PREPARING: 'EN_PREPARACION',
+  DISPATCHED: 'DESPACHADO',
+  DELIVERED: 'ENTREGADO',
+  CANCELLED: 'CANCELADO',
+}
+const STATUS_FROM_BACKEND = Object.fromEntries(
+  Object.entries(STATUS_TO_BACKEND).map(([front, back]) => [back, front]),
+)
+
+function fromBackendOrder(order) {
+  return {
+    id: order.id,
+    customerName: order.customerName,
+    status: STATUS_FROM_BACKEND[order.status] ?? order.status,
+    createdAt: order.createdAt,
+    total: order.totalAmount,
+    items: order.items.map((item) => ({
+      productId: item.productId,
+      productName: item.productName,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      subtotal: item.subtotal,
+    })),
+  }
+}
+
+function fromBackendProductSummary(product) {
+  return { id: product.id, name: product.name, price: product.price, stock: product.stock }
+}
+
+async function unwrap(promise) {
+  try {
+    const { data } = await promise
+    return data
+  } catch (error) {
+    throw new Error(getHttpErrorMessage(error))
+  }
 }
 
 export const ordersService = {
-  list: () => fixtureRequest(() => {
-    const session = requireSession()
-    const orders = session.role === 'Customer' ? fixtureStore.orders.filter((order) => fixtureStore.owners[order.id] === session.user.id) : fixtureStore.orders
-    return fixtureList('orders', orders)
-  }),
-  getById: (id) => fixtureRequest(() => findOrder(id, requireSession())),
-  listProducts: () => fixtureRequest(() => { requireSession(); return fixtureList('products', fixtureStore.products) }),
-  create: (input) => fixtureRequest(() => {
-    const session = requireSession()
+  list: async () => (await unwrap(apiClient.get('/api/orders'))).map(fromBackendOrder),
+
+  getById: async (id) => fromBackendOrder(await unwrap(apiClient.get(`/api/orders/${id}`))),
+
+  // Comparte /api/catalog/products con el catalogo: los tres roles pueden consultarlo para
+  // armar el selector del formulario, aunque solo Admin/Operator vean la pantalla de catalogo.
+  listProducts: async () =>
+    (await unwrap(apiClient.get('/api/catalog/products'))).map(fromBackendProductSummary),
+
+  create: async (input) => {
     const errors = validateOrder(input)
     if (Object.keys(errors).length) throw new Error(Object.values(errors)[0])
-    const items = input.items.map((item) => {
-      const product = fixtureStore.products.find((product) => String(product.id) === String(item.productId))
-      if (!product) throw new Error('Uno de los productos ya no está disponible.')
-      return { productId: product.id, productName: product.name, quantity: Number(item.quantity), unitPrice: product.price }
-    })
-    const order = {
-      id: `ORD-${crypto.randomUUID().slice(0, 8)}`,
-      customerName: session.user.name,
-      status: 'CREATED', createdAt: new Date().toISOString(), items,
-      total: items.reduce((total, item) => total + item.quantity * item.unitPrice, 0),
+    const body = {
+      items: input.items.map(({ productId, quantity }) => ({
+        productId: Number(productId),
+        quantity: Number(quantity),
+      })),
     }
-    if (!Number.isFinite(order.total)) throw new Error('El total del pedido excede el límite permitido.')
-    fixtureStore.orders.unshift(order)
-    fixtureStore.owners[order.id] = session.user.id
-    return order
-  }),
-  changeStatus: (id, status) => fixtureRequest(() => {
-    const session = requireSession()
-    const order = findOrder(id, session)
-    const actions = getOrderActions(order.status, [session.role], fixtureStore.owners[id] === session.user.id)
-    if (!actions.some((action) => action.status === status)) throw new Error('El cambio de estado no está permitido.')
-    if (status === 'ACCEPTED') {
-      const allocations = order.items.map((item) => {
-        const product = fixtureStore.products.find((product) => product.id === item.productId)
-        if (!product || product.stock < item.quantity) throw new Error(`Stock insuficiente para ${item.productName}.`)
-        return { product, quantity: item.quantity }
-      })
-      allocations.forEach(({ product, quantity }) => { product.stock -= quantity })
+    return fromBackendOrder(await unwrap(apiClient.post('/api/orders', body)))
+  },
+
+  // Cancelar es DELETE en el backend, no una transicion de estado como las demas: el modelo
+  // de transiciones del front trata CANCELLED igual que el resto, asi que la diferencia se
+  // resuelve aqui, no en los componentes que llaman a changeStatus.
+  changeStatus: async (id, status) => {
+    if (status === 'CANCELLED') {
+      return fromBackendOrder(await unwrap(apiClient.delete(`/api/orders/${id}`)))
     }
-    order.status = status
-    return order
-  }),
+    const body = { status: STATUS_TO_BACKEND[status] ?? status }
+    return fromBackendOrder(await unwrap(apiClient.patch(`/api/orders/${id}/status`, body)))
+  },
 }

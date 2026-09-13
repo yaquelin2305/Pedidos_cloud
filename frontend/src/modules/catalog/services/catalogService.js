@@ -1,46 +1,66 @@
-import { requireSession } from '../../auth/session/requireSession'
-import { fixtureList, fixtureRequest, fixtureStore } from '../../../shared/utils/fixtureStore'
+import apiClient from '../../../shared/http/apiClient'
+import { getHttpErrorMessage } from '../../../shared/utils/httpError'
 import { validateProduct } from '../models/product'
 
-const managers = ['Admin', 'Operator']
-function findProduct(id) {
-  const product = fixtureStore.products.find((item) => item.id === id)
-  if (!product) throw new Error('El producto no existe o fue eliminado.')
-  return product
+// El backend devuelve sku, category, active y timestamps; la vista solo usa este subconjunto.
+function fromBackendProduct(product) {
+  return {
+    id: product.id,
+    name: product.name,
+    description: product.description ?? '',
+    price: product.price,
+    stock: product.stock,
+  }
 }
+
+function toBackendProduct(input) {
+  return {
+    name: input.name.trim(),
+    description: input.description?.trim() ?? '',
+    price: Number(input.price),
+    stock: Number(input.stock),
+  }
+}
+
+async function unwrap(promise) {
+  try {
+    const { data } = await promise
+    return data
+  } catch (error) {
+    throw new Error(getHttpErrorMessage(error))
+  }
+}
+
 function validate(input) {
   const errors = validateProduct(input)
   if (Object.keys(errors).length) throw new Error(Object.values(errors)[0])
-  return { name: input.name.trim(), description: input.description?.trim() ?? '', price: Number(input.price), stock: Number(input.stock) }
 }
 
 export const catalogService = {
-  list: () => fixtureRequest(() => { requireSession(managers); return fixtureList('catalog', fixtureStore.products) }),
-  getById: (id) => fixtureRequest(() => { requireSession(managers); return findProduct(id) }),
-  create: (input) => fixtureRequest(() => {
-    requireSession(['Admin'])
-    const product = { id: `P-${crypto.randomUUID().slice(0, 8)}`, ...validate(input) }
-    fixtureStore.products.push(product)
-    return product
-  }),
-  update: (id, input) => fixtureRequest(() => {
-    requireSession(['Admin'])
-    const product = findProduct(id)
-    Object.assign(product, validate(input))
-    return product
-  }),
-  adjustStock: (id, stock) => fixtureRequest(() => {
-    requireSession(managers)
-    const product = findProduct(id)
-    const error = validateProduct({ ...product, stock }).stock
-    if (error) throw new Error(error)
-    product.stock = Number(stock)
-    return product
-  }),
-  remove: (id) => fixtureRequest(() => {
-    requireSession(['Admin'])
-    findProduct(id)
-    fixtureStore.products = fixtureStore.products.filter((product) => product.id !== id)
-    return null
-  }),
+  list: async () => (await unwrap(apiClient.get('/api/catalog/products'))).map(fromBackendProduct),
+
+  getById: async (id) => fromBackendProduct(await unwrap(apiClient.get(`/api/catalog/products/${id}`))),
+
+  create: async (input) => {
+    validate(input)
+    return fromBackendProduct(await unwrap(apiClient.post('/api/catalog/products', toBackendProduct(input))))
+  },
+
+  update: async (id, input) => {
+    validate(input)
+    return fromBackendProduct(await unwrap(apiClient.put(`/api/catalog/products/${id}`, toBackendProduct(input))))
+  },
+
+  adjustStock: async (id, stock) => {
+    if (stock === '' || !Number.isSafeInteger(Number(stock)) || Number(stock) < 0) {
+      throw new Error('Ingresa un stock entero igual o mayor que cero.')
+    }
+    return fromBackendProduct(
+      await unwrap(apiClient.patch(`/api/catalog/products/${id}/stock`, { stock: Number(stock) })),
+    )
+  },
+
+  remove: async (id) => {
+    await unwrap(apiClient.delete(`/api/catalog/products/${id}`))
+  },
 }
