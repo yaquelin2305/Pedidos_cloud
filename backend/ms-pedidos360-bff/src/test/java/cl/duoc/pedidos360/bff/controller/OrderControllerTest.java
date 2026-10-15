@@ -13,6 +13,7 @@ import java.util.stream.Stream;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -110,15 +111,15 @@ class OrderControllerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"Admin", "Operator"})
-    void cambiarEstadoReenviaEstadoYAuthorization(String role) throws Exception {
-        OrderStatusUpdateDTO body = new OrderStatusUpdateDTO("ACEPTADO");
-        when(orderProxyService.changeStatus(1L, body, AUTHORIZATION)).thenReturn(sampleOrder("ACEPTADO"));
+    @CsvSource({"Admin,ACEPTADO", "Operator,ACEPTADO", "Admin,EN_PREPARACION", "Operator,EN_PREPARACION", "Admin,DESPACHADO", "Operator,DESPACHADO"})
+    void cambiarEstadoReenviaEstadoYAuthorization(String role, String target) throws Exception {
+        OrderStatusUpdateDTO body = new OrderStatusUpdateDTO(target);
+        when(orderProxyService.changeStatus(1L, body, AUTHORIZATION)).thenReturn(sampleOrder(target));
 
         mockMvc.perform(authenticated(patch("/api/orders/1/status"), role)
                         .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(body)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("ACEPTADO"));
+                .andExpect(jsonPath("$.status").value(target));
         verify(orderProxyService).changeStatus(1L, body, AUTHORIZATION);
     }
 

@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Set;
 
 import org.springframework.stereotype.Service;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.annotation.Transactional;
 
 import lombok.RequiredArgsConstructor;
@@ -79,8 +80,8 @@ public class OrderServiceImpl implements OrderService {
     }
 
     /**
-     * Cambia el estado del pedido validando la tabla de transiciones. Al aceptar (transicion a
-     * ACEPTADO) se descuenta stock en catalog por cada linea antes de confirmar el cambio: si
+     * Cambia el estado del pedido validando la tabla de transiciones. Al aceptar desde CREADO
+     * se descuenta stock en catalog por cada linea antes de confirmar el cambio: si
      * alguna linea falla, se lanza StockUnavailableException y el pedido permanece en su estado
      * anterior (la excepcion revierte la transaccion, por lo que ningun cambio de estado ni de
      * timestamps queda persistido).
@@ -93,18 +94,29 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public OrderResponseDTO changeStatus(Long id, OrderStatus newStatus, OrderRequester requester) {
+        if (!requester.privileged()) {
+            throw new AccessDeniedException("Solo Admin y Operator pueden cambiar el estado");
+        }
         Order order = findWithOwnershipCheck(id, requester);
-        OrderStatusValidator.validateTransition(order.getStatus(), newStatus);
+        OrderStatus previousStatus = order.getStatus();
+        OrderStatusValidator.validateTransition(previousStatus, newStatus);
 
-        if (newStatus == OrderStatus.ACEPTADO) {
+        if (previousStatus == OrderStatus.CREADO && newStatus == OrderStatus.ACEPTADO) {
             for (OrderItem item : order.getItems()) {
                 catalogClient.decreaseStock(item.getProductId(), item.getQuantity());
             }
             order.setAcceptedAt(Instant.now());
-        } else if (newStatus == OrderStatus.DESPACHADO) {
+        } else if (previousStatus == OrderStatus.EN_PREPARACION && newStatus == OrderStatus.DESPACHADO) {
             order.setDispatchedAt(Instant.now());
         } else if (newStatus == OrderStatus.ENTREGADO) {
             order.setDeliveredAt(Instant.now());
+        }
+
+        if (previousStatus == OrderStatus.ENTREGADO && newStatus == OrderStatus.DESPACHADO) {
+            order.setDeliveredAt(null);
+        } else if (previousStatus == OrderStatus.DESPACHADO && newStatus == OrderStatus.EN_PREPARACION) {
+            order.setDispatchedAt(null);
+            order.setDeliveredAt(null);
         }
 
         order.setStatus(newStatus);

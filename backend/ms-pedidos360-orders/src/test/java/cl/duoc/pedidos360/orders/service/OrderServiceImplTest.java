@@ -8,13 +8,19 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.times;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.springframework.security.access.AccessDeniedException;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -130,5 +136,103 @@ class OrderServiceImplTest {
 
         assertThatThrownBy(() -> orderService.getById(1L, OTHER_CUSTOMER))
                 .isInstanceOf(ForbiddenOrderAccessException.class);
+    }
+
+    @Test
+    void corregirEntregaConservaDespachoYEliminaFechaDeEntrega() {
+        Order order = order(1L, CUSTOMER.customerId(), OrderStatus.ENTREGADO);
+        Instant accepted = Instant.parse("2026-01-01T10:00:00Z");
+        Instant dispatched = accepted.plusSeconds(3600);
+        order.setAcceptedAt(accepted);
+        order.setDispatchedAt(dispatched);
+        order.setDeliveredAt(dispatched.plusSeconds(3600));
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        OrderResponseDTO response = orderService.changeStatus(1L, OrderStatus.DESPACHADO, OPERATOR);
+
+        assertThat(response.status()).isEqualTo(OrderStatus.DESPACHADO);
+        assertThat(order.getDeliveredAt()).isNull();
+        assertThat(order.getDispatchedAt()).isEqualTo(dispatched);
+        assertThat(order.getAcceptedAt()).isEqualTo(accepted);
+        verifyNoInteractions(catalogClient);
+    }
+
+    @Test
+    void corregirDespachoEliminaFechaDeDespachoYConservaAceptacion() {
+        Order order = order(1L, CUSTOMER.customerId(), OrderStatus.DESPACHADO);
+        Instant accepted = Instant.parse("2026-01-01T10:00:00Z");
+        order.setAcceptedAt(accepted);
+        order.setDispatchedAt(accepted.plusSeconds(3600));
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        orderService.changeStatus(1L, OrderStatus.EN_PREPARACION, OPERATOR);
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.EN_PREPARACION);
+        assertThat(order.getDispatchedAt()).isNull();
+        assertThat(order.getDeliveredAt()).isNull();
+        assertThat(order.getAcceptedAt()).isEqualTo(accepted);
+        verifyNoInteractions(catalogClient);
+    }
+
+    @Test
+    void corregirPreparacionConservaFechaDeAceptacionYNoDescuentaStock() {
+        Order order = order(1L, CUSTOMER.customerId(), OrderStatus.EN_PREPARACION);
+        Instant accepted = Instant.parse("2026-01-01T10:00:00Z");
+        order.setAcceptedAt(accepted);
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        orderService.changeStatus(1L, OrderStatus.ACEPTADO, OPERATOR);
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.ACEPTADO);
+        assertThat(order.getAcceptedAt()).isEqualTo(accepted);
+        verifyNoInteractions(catalogClient);
+    }
+
+    @Test
+    void permiteCorregirYAvanzarDeNuevoSinDuplicarElDescuento() {
+        Order order = order(1L, CUSTOMER.customerId(), OrderStatus.CREADO);
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        orderService.changeStatus(1L, OrderStatus.ACEPTADO, OPERATOR);
+        orderService.changeStatus(1L, OrderStatus.EN_PREPARACION, OPERATOR);
+        orderService.changeStatus(1L, OrderStatus.DESPACHADO, OPERATOR);
+        orderService.changeStatus(1L, OrderStatus.ENTREGADO, OPERATOR);
+        orderService.changeStatus(1L, OrderStatus.DESPACHADO, OPERATOR);
+        orderService.changeStatus(1L, OrderStatus.EN_PREPARACION, OPERATOR);
+        orderService.changeStatus(1L, OrderStatus.ACEPTADO, OPERATOR);
+        orderService.changeStatus(1L, OrderStatus.EN_PREPARACION, OPERATOR);
+        orderService.changeStatus(1L, OrderStatus.DESPACHADO, OPERATOR);
+        orderService.changeStatus(1L, OrderStatus.ENTREGADO, OPERATOR);
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.ENTREGADO);
+        assertThat(order.getAcceptedAt()).isNotNull();
+        assertThat(order.getDispatchedAt()).isNotNull();
+        assertThat(order.getDeliveredAt()).isNotNull();
+        verify(catalogClient, times(1)).decreaseStock(10L, 2);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"ENTREGADO,ACEPTADO", "DESPACHADO,ACEPTADO", "ACEPTADO,CREADO", "CANCELADO,DESPACHADO", "ENTREGADO,CANCELADO"})
+    void rechazaSaltosHaciaAtrasYReactivacion(OrderStatus from, OrderStatus to) {
+        Order order = order(1L, CUSTOMER.customerId(), from);
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> orderService.changeStatus(1L, to, OPERATOR))
+                .isInstanceOf(InvalidOrderStatusTransitionException.class);
+
+        assertThat(order.getStatus()).isEqualTo(from);
+        verify(orderRepository, never()).save(any(Order.class));
+        verifyNoInteractions(catalogClient);
+    }
+
+    @Test
+    void unClienteNoPuedeCorregirEstadosAunqueSeaSuPedido() {
+        assertThatThrownBy(() -> orderService.changeStatus(1L, OrderStatus.DESPACHADO, CUSTOMER))
+                .isInstanceOf(AccessDeniedException.class);
+        verifyNoInteractions(orderRepository, catalogClient);
     }
 }

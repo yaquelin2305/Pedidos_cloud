@@ -13,6 +13,8 @@ import java.math.BigDecimal;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Bean;
@@ -126,5 +128,34 @@ class OrderControllerTest {
                                 {"status":"ACEPTADO"}
                                 """))
                 .andExpect(status().isOk());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"Admin,DESPACHADO", "Operator,DESPACHADO", "Admin,EN_PREPARACION", "Operator,EN_PREPARACION", "Admin,ACEPTADO", "Operator,ACEPTADO"})
+    void permiteSolicitarCorreccionConRolOperativo(String role, OrderStatus target) throws Exception {
+        when(orderService.changeStatus(eq(1L), eq(target), any())).thenReturn(sampleOrder());
+
+        mockMvc.perform(patch("/api/orders/1/status")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_" + role)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"" + target + "\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void corregirEntregaConRolClienteRespondeProhibido() throws Exception {
+        mockMvc.perform(patch("/api/orders/1/status")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_Customer")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"DESPACHADO\"}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void corregirEntregaSinTokenRespondeNoAutorizado() throws Exception {
+        mockMvc.perform(patch("/api/orders/1/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"DESPACHADO\"}"))
+                .andExpect(status().isUnauthorized());
     }
 }
