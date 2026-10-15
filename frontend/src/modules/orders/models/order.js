@@ -4,15 +4,20 @@ export const orderStates = {
 }
 export const orderTransitions = {
   CREATED: ['ACCEPTED', 'CANCELLED'], ACCEPTED: ['PREPARING', 'CANCELLED'],
-  PREPARING: ['DISPATCHED', 'CANCELLED'], DISPATCHED: ['DELIVERED'], DELIVERED: [], CANCELLED: [],
+  PREPARING: ['DISPATCHED', 'ACCEPTED'], DISPATCHED: ['DELIVERED', 'PREPARING'], DELIVERED: ['DISPATCHED'], CANCELLED: [],
 }
+const previousStates = { PREPARING: 'ACCEPTED', DISPATCHED: 'PREPARING', DELIVERED: 'DISPATCHED' }
 const actionLabels = { ACCEPTED: 'Aceptar', PREPARING: 'Preparar', DISPATCHED: 'Despachar', DELIVERED: 'Entregar', CANCELLED: 'Cancelar' }
+
+export function isOrderCorrection(from, to) {
+  return previousStates[from] === to
+}
 
 export function getOrderActions(status, roles, isOwner = false) {
   const targets = orderTransitions[status] ?? []
   const isManager = roles.some((role) => ['Admin', 'Operator'].includes(role))
   return targets.filter((target) => isManager || (roles.includes('Customer') && isOwner && status === 'CREATED' && target === 'CANCELLED'))
-    .map((status) => ({ status, label: actionLabels[status] }))
+    .map((target) => ({ status: target, label: isOrderCorrection(status, target) ? `Volver a ${target === 'PREPARING' ? 'preparación' : orderStates[target].toLowerCase()}` : actionLabels[target] }))
 }
 
 export function validateOrder(input) {

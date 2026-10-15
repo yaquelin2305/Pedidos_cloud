@@ -1,23 +1,39 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { getOrderActions, orderTransitions, validateOrder } from './order.js'
+import { getOrderActions, isOrderCorrection, orderTransitions, validateOrder } from './order.js'
 
 test('no se puede saltar de creado o aceptado a despachado', () => {
   assert.equal(orderTransitions.CREATED.includes('DISPATCHED'), false)
   assert.equal(orderTransitions.ACCEPTED.includes('DISPATCHED'), false)
-  assert.deepEqual(orderTransitions.PREPARING, ['DISPATCHED', 'CANCELLED'])
+  assert.deepEqual(orderTransitions.PREPARING, ['DISPATCHED', 'ACCEPTED'])
 })
 
-test('los estados terminales nunca ofrecen acciones', () => {
-  for (const status of ['DELIVERED', 'CANCELLED']) {
-    for (const role of ['Admin', 'Operator', 'Customer']) assert.deepEqual(getOrderActions(status, [role], true), [])
+test('un pedido cancelado no se reactiva', () => {
+  for (const role of ['Admin', 'Operator', 'Customer']) assert.deepEqual(getOrderActions('CANCELLED', [role], true), [])
+})
+
+test('Admin y Operator pueden corregir cada hito logistico un paso atras', () => {
+  const corrections = [
+    ['PREPARING', 'ACCEPTED', 'Volver a aceptado'],
+    ['DISPATCHED', 'PREPARING', 'Volver a preparación'],
+    ['DELIVERED', 'DISPATCHED', 'Volver a despachado'],
+  ]
+  for (const [from, to, label] of corrections) {
+    assert.equal(isOrderCorrection(from, to), true)
+    for (const role of ['Admin', 'Operator']) {
+      assert.ok(getOrderActions(from, [role]).some((action) => action.status === to && action.label === label))
+    }
   }
+  assert.equal(isOrderCorrection('DISPATCHED', 'DELIVERED'), false)
+  assert.equal(isOrderCorrection('ACCEPTED', 'CREATED'), false)
+  assert.equal(isOrderCorrection('CREATED', 'CANCELLED'), false)
+  assert.equal(orderTransitions.ACCEPTED.includes('CREATED'), false)
 })
 
 test('Customer solo puede cancelar pedidos propios creados', () => {
   assert.deepEqual(getOrderActions('CREATED', ['Customer'], true), [{ status: 'CANCELLED', label: 'Cancelar' }])
   assert.deepEqual(getOrderActions('CREATED', ['Customer'], false), [])
-  for (const status of ['ACCEPTED', 'PREPARING', 'DISPATCHED']) assert.deepEqual(getOrderActions(status, ['Customer'], true), [])
+  for (const status of ['ACCEPTED', 'PREPARING', 'DISPATCHED', 'DELIVERED']) assert.deepEqual(getOrderActions(status, ['Customer'], true), [])
 })
 
 test('Admin y Operator tienen las mismas transiciones operativas', () => {

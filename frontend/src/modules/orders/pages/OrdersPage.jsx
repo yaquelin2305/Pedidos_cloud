@@ -4,6 +4,8 @@ import useOrders from '../hooks/useOrders'
 import OrderList from '../components/OrderList'
 import OrderDetail from '../components/OrderDetail'
 import OrderForm from '../components/OrderForm'
+import OrderStatusConfirmation from '../components/OrderStatusConfirmation'
+import { orderStates } from '../models/order'
 import Button from '../../../shared/components/Button'
 import PageHeader from '../../../shared/components/PageHeader'
 import StatusMessage from '../../../shared/components/StatusMessage'
@@ -15,7 +17,7 @@ export default function OrdersPage() {
   const [creating, setCreating] = useState(false)
   const [selectedId, setSelectedId] = useState(null)
   const [revision, setRevision] = useState(0)
-  const [cancelling, setCancelling] = useState(null)
+  const [statusChange, setStatusChange] = useState(null)
   const [actionError, setActionError] = useState('')
   const [notice, setNotice] = useState('')
   async function save(input) {
@@ -26,26 +28,28 @@ export default function OrdersPage() {
   }
   async function transition(order, status) {
     setActionError('')
+    setNotice('')
     try {
       await changeStatus(order.id, status)
-      setCancelling(null)
+      setStatusChange(null)
       setRevision((value) => value + 1)
-      setNotice('Estado del pedido actualizado.')
+      setNotice(`Pedido ${order.id} actualizado a ${orderStates[status].toLowerCase()}.`)
     } catch (failure) { setActionError(failure.message) }
   }
   function requestChange(order, status) {
-    if (status === 'CANCELLED') { setCancelling(order); setActionError('') }
-    else transition(order, status)
+    setStatusChange({ order, status })
+    setActionError('')
+    setNotice('')
   }
   return (
     <>
-      <PageHeader title="Pedidos"><Button onClick={() => { setCreating(true); setSelectedId(null); setCancelling(null); setActionError('') }} disabled={pending}>Nuevo pedido</Button></PageHeader>
-      <p className="sr-only" role="status">{notice}</p>
+      <PageHeader title="Pedidos"><Button onClick={() => { setCreating(true); setSelectedId(null); setStatusChange(null); setActionError('') }} disabled={pending || !!statusChange}>Nuevo pedido</Button></PageHeader>
+      <p role="status">{notice}</p>
       {creating && <OrderForm onSave={save} onCancel={() => setCreating(false)} pending={pending} />}
-      {cancelling && <section className="confirmation" aria-label="Confirmar cancelación"><p>Cancelar el pedido <strong>{cancelling.id}</strong>?</p><Button variant="danger" onClick={() => transition(cancelling, 'CANCELLED')} disabled={pending}>Confirmar cancelación</Button><Button variant="secondary" onClick={() => setCancelling(null)} disabled={pending}>Conservar pedido</Button></section>}
+      {statusChange && <OrderStatusConfirmation order={statusChange.order} status={statusChange.status} onConfirm={() => transition(statusChange.order, statusChange.status)} onDismiss={() => { setStatusChange(null); setActionError('') }} pending={pending} />}
       {actionError && <StatusMessage type="error" message={actionError} />}
       {selectedId && <OrderDetail key={selectedId} id={selectedId} revision={revision} onClose={() => setSelectedId(null)} />}
-      {loading ? <StatusMessage type="loading" message="Cargando pedidos..." /> : error ? <StatusMessage type="error" message={error} onRetry={reload} /> : orders.length === 0 ? <StatusMessage message="No hay pedidos registrados." /> : <OrderList orders={orders} roles={roles} onSelect={(id) => { setSelectedId(id); setCreating(false) }} onChange={requestChange} pending={pending} />}
+      {loading ? <StatusMessage type="loading" message="Cargando pedidos..." /> : error ? <StatusMessage type="error" message={error} onRetry={reload} /> : orders.length === 0 ? <StatusMessage message="No hay pedidos registrados." /> : <OrderList orders={orders} roles={roles} onSelect={(id) => { setSelectedId(id); setCreating(false) }} onChange={requestChange} pending={pending || !!statusChange} />}
     </>
   )
 }
