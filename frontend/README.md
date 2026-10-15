@@ -85,6 +85,18 @@ Al integrar, los servicios deberán adaptar el contrato real (`totalAmount`, est
 `CREADO` y `ACEPTADO`, IDs numéricos) al modelo de las vistas (`total`, estados en inglés).
 El detalle utiliza `item.subtotal` cuando existe y conserva el cálculo local para fixtures.
 
+## Corrección de estados de pedidos
+
+Los cambios de estado requieren confirmación, mostrando el pedido y los estados de origen
+y destino. «Mantener estado actual» cierra la confirmación sin enviar una modificación.
+Admin y Operator pueden volver un paso atrás desde Entregado, Despachado o En preparación
+para corregir un registro erróneo. El cambio se guarda mediante el mismo endpoint de estado
+y se actualizan el listado y el detalle. Estas correcciones no vuelven a descontar stock.
+
+La aceptación no se revierte a Creado. Cancelar el pedido es una acción separada y definitiva:
+Customer solo puede cancelar sus pedidos creados; Admin y Operator, los creados o aceptados.
+La cancelación no repone stock automáticamente.
+
 ## Equivalencias MSAL
 
 | Pauta (Angular) | Implementación real (React) |

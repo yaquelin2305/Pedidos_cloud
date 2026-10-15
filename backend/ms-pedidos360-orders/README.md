@@ -19,7 +19,7 @@ resolverlo con el docente.
 ## Máquina de estados
 
 ```
-CREADO -> ACEPTADO -> EN_PREPARACION -> DESPACHADO -> ENTREGADO
+CREADO -> ACEPTADO <-> EN_PREPARACION <-> DESPACHADO <-> ENTREGADO
 CREADO -> CANCELADO
 ACEPTADO -> CANCELADO
 ```
@@ -28,6 +28,16 @@ Cualquier otra transición responde 409. Al aceptar un pedido (`ACEPTADO`), este
 stock en `ms-pedidos360-catalog` por cada línea antes de confirmar el cambio; si el catálogo
 rechaza el descuento (stock insuficiente), la transición se aborta y el pedido queda en su estado
 anterior.
+
+Admin y Operator pueden corregir un estado registrado por error volviendo un paso atrás:
+`ENTREGADO → DESPACHADO`, `DESPACHADO → EN_PREPARACION` o `EN_PREPARACION → ACEPTADO`.
+Se utiliza el mismo `PATCH /api/orders/{id}/status`. La corrección elimina la fecha del hito
+revertido, conserva las anteriores y no modifica el stock. Volver a avanzar registra una nueva
+fecha de despacho o entrega. El stock solo se descuenta al pasar de `CREADO` a `ACEPTADO`.
+
+No se permite volver de `ACEPTADO` a `CREADO`, porque la aceptación ya comprometió stock.
+Cancelar es una operación separada, mantiene las restricciones por rol y no repone stock
+automáticamente. Un pedido `CANCELADO` no se reactiva.
 
 ## Integración con catalog
 
