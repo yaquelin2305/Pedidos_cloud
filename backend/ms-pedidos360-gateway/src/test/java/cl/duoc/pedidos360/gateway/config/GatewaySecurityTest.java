@@ -13,8 +13,8 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
+import org.junit.jupiter.api.BeforeEach;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -32,7 +32,6 @@ import cl.duoc.pedidos360.gateway.support.TestJwt;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@AutoConfigureWebTestClient
 @ActiveProfiles("test")
 @Import(GatewaySecurityTest.TestConfig.class)
 class GatewaySecurityTest {
@@ -43,8 +42,15 @@ class GatewaySecurityTest {
     private static final TestJwt TOKENS = new TestJwt(KEYS, ISSUER, AUDIENCE);
     private static final MockWebServer BFF = startBff();
 
-    @Autowired
+    @LocalServerPort
+    private int port;
+
     private WebTestClient client;
+
+    @BeforeEach
+    void connectToGateway() {
+        client = WebTestClient.bindToServer().baseUrl("http://localhost:" + port).build();
+    }
 
     private static MockWebServer startBff() {
         var server = new MockWebServer();
