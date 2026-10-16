@@ -69,14 +69,3 @@ Las variables `VITE_` se incorporan durante el build: después de cambiarlas hay
 reconstruir la imagen del frontend. No contienen contraseñas ni secretos de servidor.
 `depends_on` ordena el inicio de los contenedores, pero no comprueba que Spring ya esté
 listo.
-
-## Revisión y despliegue del gateway
-
-La rama `api-gateway` requiere revisión del equipo antes del merge a `develop` o
-`main`, que disparan el despliegue. Cambiar antes el secret `VITE_API_BASE_URL`
-a `https://api.52.207.140.106.nip.io`. No se necesitan nuevos secrets.
-
-Después de desplegar, probar los tres roles y capturar respuestas 200, 401 y 403,
-además del preflight y el JSON de todas las rutas. Si hay reinicios por memoria,
-subir a `t3.medium`. Solo después de validar el flujo real, eliminar el antiguo
-AWS API Gateway `pedidos360_Api` (`khqmb25tz2`). Ver [PROCESO-AWS.md](PROCESO-AWS.md).
