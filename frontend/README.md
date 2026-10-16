@@ -44,7 +44,7 @@ conexión con Azure. Para usar MSAL en preview también debe estar registrado es
 
 | Variable | Uso |
 |---|---|
-| `VITE_API_BASE_URL` | Gateway: `https://api.52.207.140.106.nip.io`; en local, `http://localhost:8090` |
+| `VITE_API_BASE_URL` | Gateway: `http://localhost:8090` |
 | `VITE_API_SCOPE` | Scope expuesto por la API, por ejemplo `api://<API_CLIENT_ID>/access_as_user` |
 | `VITE_AZURE_CLIENT_ID` | Identificador de la App Registration de la SPA |
 | `VITE_AZURE_AUTHORITY` | Authority del tenant; workforce: `https://login.microsoftonline.com/<TENANT_ID>` |
