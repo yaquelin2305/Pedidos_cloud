@@ -61,7 +61,7 @@ jobs:
             DOMAIN=52.207.140.106.nip.io
             if [ ! -f /etc/letsencrypt/live/$DOMAIN/fullchain.pem ] ||
                ! sudo openssl x509 -in /etc/letsencrypt/live/$DOMAIN/fullchain.pem -noout -ext subjectAltName |
-                 tr ',' '\n' | grep -Eq "^[[:space:]]*DNS:api\.${DOMAIN//./\.}[[:space:]]*$"; then
+                 tr ', ' '\n' | grep -Fxq "DNS:api.$DOMAIN"; then
               which certbot || sudo dnf install -y certbot
               sudo docker compose --env-file frontend/.env --env-file .env down 2>/dev/null || true
               sudo certbot certonly --standalone --cert-name $DOMAIN --expand -d $DOMAIN -d api.$DOMAIN --non-interactive --agree-tos \
