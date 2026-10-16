@@ -62,7 +62,7 @@ Para desarrollo sin TLS, levantar cada servicio con Maven, el gateway en 8090 y
 Vite en 5173; configurar `VITE_API_BASE_URL=http://localhost:8090`.
 
 Los límites iniciales son gateway/BFF 320 MiB cada uno y orders/catalog 448 MiB cada
-uno. Cada JVM limita el heap al 75% de su contenedor; el resto también necesita
+uno. Cada JVM limita el heap al 60% de su contenedor; el resto también necesita
 memoria nativa. Revisar `docker stats` después del despliegue en la EC2 de 2 GiB.
 
 Las variables `VITE_` se incorporan durante el build: después de cambiarlas hay que
