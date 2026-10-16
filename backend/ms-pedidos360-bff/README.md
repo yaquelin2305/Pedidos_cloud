@@ -72,5 +72,5 @@ otra clave, y 200 frente a 403 según el rol.
 Cubren el camino feliz de cada ruta, los roles permitidos, los rechazos 403 y el reenvío exacto
 de `Authorization`, identificadores y DTOs. No requieren Azure ni microservicios reales.
 
-El navegador consume el gateway (8090 en local). CORS se configura ?nicamente all?;
-el BFF conserva su validaci?n JWT y autorizaci?n por rol.
+El navegador consume el gateway (8090 en local). CORS se configura únicamente allí;
+el BFF conserva su validación JWT y autorización por rol.

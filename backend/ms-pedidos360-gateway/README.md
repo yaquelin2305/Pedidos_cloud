@@ -4,7 +4,7 @@ API Gateway reactivo con Java 21, Spring Boot 3.5.16 y Spring Cloud 2025.0.3.
 Valida JWT y permisos antes de reenviar al BFF. No reescribe paths ni sustituye
 `Authorization`. El BFF mantiene su propia seguridad.
 
-## Configuraci?n
+## Configuración
 
 | Variable | Uso / default local |
 |---|---|
@@ -12,24 +12,24 @@ Valida JWT y permisos antes de reenviar al BFF. No reescribe paths ni sustituye
 | `JWT_ISSUER_URI` | Issuer del tenant; obligatorio |
 | `JWT_AUDIENCE` | Audience de la API; obligatorio |
 | `JWT_REQUIRED_SCOPE` | Scope en `scp`; `access_as_user` |
-| `BFF_BASE_URL` | Destino ?nico; `http://localhost:8080` |
-| `CORS_ALLOWED_ORIGINS` | Or?genes separados por comas; `http://localhost:5173` |
+| `BFF_BASE_URL` | Destino único; `http://localhost:8080` |
+| `CORS_ALLOWED_ORIGINS` | Orígenes separados por comas; `http://localhost:5173` |
 
-La firma se verifica contra JWKS del issuer; tambi?n se validan issuer, expiraci?n,
-audience y scope. Token ausente o inv?lido devuelve 401; rol insuficiente, 403.
+La firma se verifica contra JWKS del issuer; también se validan issuer, expiración,
+audience y scope. Token ausente o inválido devuelve 401; rol insuficiente, 403.
 Ambos errores usan JSON con `timestamp`, `status`, `error` y `message`.
 
 CORS se procesa antes de autenticar, permite GET/POST/PUT/PATCH/DELETE/OPTIONS y
 headers Authorization/Content-Type, sin credentials, con maxAge 3600. En Compose
-el ?nico origen permitido es `https://52.207.140.106.nip.io`.
+el único origen permitido es `https://52.207.140.106.nip.io`.
 
 ## Rutas y roles
 
-Todas las rutas van al BFF con timeout de conexi?n de 5 s y respuesta de 15 s.
+Todas las rutas van al BFF con timeout de conexión de 5 s y respuesta de 15 s.
 
-| M?todo | Ruta | Roles |
+| Método | Ruta | Roles |
 |---|---|---|
-| OPTIONS | /** | P?blico (preflight) |
+| OPTIONS | /** | Público (preflight) |
 | GET | /me | Autenticado |
 | GET, POST | /api/orders | Admin, Operator, Customer |
 | GET, DELETE | /api/orders/{id} | Admin, Operator, Customer |
@@ -39,7 +39,7 @@ Todas las rutas van al BFF con timeout de conexi?n de 5 s y respuesta de 15 s.
 | PUT, DELETE | /api/catalog/products/{id} | Admin |
 | PATCH | /api/catalog/products/{id}/stock | Admin, Operator |
 
-Cualquier otra combinaci?n se rechaza. Los permisos coinciden con los controladores
+Cualquier otra combinación se rechaza. Los permisos coinciden con los controladores
 del BFF; las reglas de negocio y propiedad de pedidos siguen en los servicios.
 
 ## Ejecutar y probar
@@ -53,7 +53,7 @@ mvn clean test
 ```
 
 Las pruebas usan WebTestClient, JWT firmados con RSA generado en memoria y
-MockWebServer como BFF. Importan las rutas reales de producci?n, sin depender de
+MockWebServer como BFF. Importan las rutas reales de producción, sin depender de
 Azure ni de una base de datos. El perfil `test` sustituye solo el decoder y sus
 claves, manteniendo los mismos validadores.
 
@@ -72,7 +72,7 @@ curl -i -X OPTIONS http://localhost:8090/api/orders \
 Para probar en nube, usar `https://api.52.207.140.106.nip.io` y el origen
 `https://52.207.140.106.nip.io`. Solo nginx publica puertos en Compose.
 
-## Referencias de versi?n
+## Referencias de versión
 
 - [Spring Cloud 2025.0](https://github.com/spring-cloud/spring-cloud-release/wiki/Spring-Cloud-2025.0-Release-Notes)
 - [Propiedades de Gateway WebFlux](https://docs.spring.io/spring-cloud-gateway/reference/configprops.html)
