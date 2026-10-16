@@ -4,3 +4,6 @@
 .vscode/
 *.log
 .env
+CLAUDE.md
+PROCESO-*.md
+PARTE2.md
