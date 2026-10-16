@@ -26,7 +26,8 @@ exige base de datos por servicio.
 ## Docker Compose
 
 El Compose de la raíz construye frontend, gateway, BFF, orders y catalog, y levanta
-PostgreSQL. Todo corre en localhost; Azure Entra es el único servicio externo.
+PostgreSQL y un clúster RabbitMQ de dos nodos. Todo corre en localhost; Azure Entra es el único
+servicio externo.
 
 Requiere Docker con Compose, las variables de Azure en `frontend/.env` y las del backend
 en `.env` de la raíz, siguiendo `.env.example`. Ambos archivos son locales. Compose
@@ -51,8 +52,8 @@ Navegador --> gateway (localhost:8090) (JWT, scope, roles, CORS)
           --> orders:8081 / catalog:8082 --> postgres:5432
 ```
 
-Se publican los puertos 5173 (SPA), 8090 (gateway) y 5432 (PostgreSQL, para
-inspeccionar la base). BFF, orders y catalog solo son accesibles dentro de la red de
+Se publican los puertos 5173 (SPA), 8090 (gateway), 5432 (PostgreSQL, para
+inspeccionar la base) y 15672 (consola de RabbitMQ, solo en `127.0.0.1`). BFF, orders y catalog solo son accesibles dentro de la red de
 Compose. El Bearer y los paths llegan intactos al BFF.
 
 Para desarrollo sin contenedores, levantar cada servicio con Maven, el gateway en 8090
@@ -66,3 +67,38 @@ Las variables `VITE_` se incorporan durante el build: después de cambiarlas hay
 reconstruir la imagen del frontend. No contienen contraseñas ni secretos de servidor.
 `depends_on` ordena el inicio de los contenedores, pero no comprueba que Spring ya esté
 listo.
+
+## RabbitMQ
+
+Clúster de dos nodos (`rabbit@rabbitmq-1` y `rabbit@rabbitmq-2`, imagen `rabbitmq:4.1-management`)
+formado con `classic_config` desde `infra/rabbitmq/rabbitmq.conf`. Ambos nodos comparten la cookie
+Erlang `RABBITMQ_ERLANG_COOKIE`; el usuario es `RABBITMQ_USERNAME`/`RABBITMQ_PASSWORD` (no `guest`).
+Cada nodo guarda sus datos en su propio volumen. AMQP (5672) queda interno a la red de Compose;
+solo se publica la consola de `rabbitmq-1`.
+
+Levantar todo y verificar el clúster:
+
+```sh
+docker compose --env-file frontend/.env --env-file .env up --build -d
+docker compose --env-file frontend/.env --env-file .env exec rabbitmq-1 rabbitmqctl cluster_status
+```
+
+`cluster_status` debe listar los dos nodos en *Running Nodes*. La consola está en
+`http://localhost:15672` con las credenciales de `.env`.
+
+Las colas son quorum: en la consola, *Queues and Streams* → una cola → *Members* muestra ambos nodos.
+También desde la terminal:
+
+```sh
+docker compose --env-file frontend/.env --env-file .env exec rabbitmq-1 rabbitmq-queues quorum_status pedidos360.catalog.stock-alerts
+```
+
+`classic_config` solo aplica la primera vez que arranca un nodo. Si un nodo quedó fuera del clúster,
+borrar sus volúmenes y volver a levantarlos:
+
+```sh
+docker compose --env-file frontend/.env --env-file .env rm -sf rabbitmq-1 rabbitmq-2
+docker volume rm pedidos_cloud_rabbitmq-1-data pedidos_cloud_rabbitmq-2-data
+```
+
+La topología, el flujo de mensajes y la política de errores de cada servicio están en su README.
