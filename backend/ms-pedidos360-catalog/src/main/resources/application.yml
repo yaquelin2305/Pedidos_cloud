@@ -14,6 +14,31 @@ spring:
         jwt:
           issuer-uri: ${JWT_ISSUER_URI}
           audiences: ${JWT_AUDIENCE}
+  rabbitmq:
+    addresses: ${RABBITMQ_ADDRESSES:localhost:5672}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 10
+        default-requeue-rejected: false
 
 server:
   port: ${SERVER_PORT:8082}
+
+pedidos360:
+  catalog:
+    low-stock-threshold: 5
+  messaging:
+    dead-letter-exchange: pedidos360.dlx
+    delivery-limit: 3
+    stock:
+      exchange: pedidos360.catalog.events
+      queue: pedidos360.catalog.stock-alerts
+      dead-letter-queue: pedidos360.catalog.stock-alerts.dlq
+      routing-key: stock.low
