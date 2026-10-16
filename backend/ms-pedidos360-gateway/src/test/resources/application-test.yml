@@ -1,6 +1,3 @@
-spring:
-  config:
-    import: classpath:gateway-config/application.yml
 JWT_ISSUER_URI: https://test-issuer.pedidos360.local
 JWT_AUDIENCE: api://pedidos360-test
 CORS_ALLOWED_ORIGINS: http://localhost:5173
