@@ -21,7 +21,7 @@ Ambos errores usan JSON con `timestamp`, `status`, `error` y `message`.
 
 CORS se procesa antes de autenticar, permite GET/POST/PUT/PATCH/DELETE/OPTIONS y
 headers Authorization/Content-Type, sin credentials, con maxAge 3600. En Compose
-el único origen permitido es `https://52.207.140.106.nip.io`.
+el único origen permitido es `http://localhost:5173`.
 
 ## Rutas y roles
 
@@ -68,9 +68,6 @@ curl -i -X OPTIONS http://localhost:8090/api/orders \
   -H 'Access-Control-Request-Method: POST' \
   -H 'Access-Control-Request-Headers: Authorization, Content-Type'
 ```
-
-Para probar en nube, usar `https://api.52.207.140.106.nip.io` y el origen
-`https://52.207.140.106.nip.io`. Solo nginx publica puertos en Compose.
 
 ## Referencias de versión
 
