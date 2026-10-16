@@ -18,19 +18,19 @@ Entra como IDaaS.
 
 ## Base de datos
 
-PostgreSQL en Amazon RDS (Learner Lab). `orders` y `catalog` comparten una sola base
-(`orders_db`) — no hay aislamiento de esquema entre servicios porque sus tablas no
-tienen nombres en conflicto y la rúbrica no exige base de datos por servicio.
+PostgreSQL 16 en un contenedor de Compose, con los datos en el volumen `postgres-data`.
+`orders` y `catalog` comparten una sola base (`pedidos360`) — no hay aislamiento de
+esquema entre servicios porque sus tablas no tienen nombres en conflicto y la rúbrica no
+exige base de datos por servicio.
 
 ## Docker Compose
 
-El Compose de la raíz construye frontend, gateway, BFF, orders y catalog. Reutiliza los Dockerfile
-de los microservicios; no incorpora una base de datos ni otros servicios.
+El Compose de la raíz construye frontend, gateway, BFF, orders y catalog, y levanta
+PostgreSQL. Todo corre en localhost; Azure Entra es el único servicio externo.
 
 Requiere Docker con Compose, las variables de Azure en `frontend/.env` y las del backend
-en `.env` de la raíz, siguiendo `.env.example`. Ambos archivos son locales. La base de
-datos debe ser accesible desde los contenedores. Compose configura `JPA_DDL_AUTO=update`
-para los servicios de dominio.
+en `.env` de la raíz, siguiendo `.env.example`. Ambos archivos son locales. Compose
+configura `JPA_DDL_AUTO=update` para que orders y catalog creen sus tablas al arrancar.
 
 Desde la raíz:
 
@@ -40,30 +40,27 @@ docker compose --env-file frontend/.env --env-file .env logs -f
 docker compose --env-file frontend/.env --env-file .env down
 ```
 
-El despliegue usa `https://52.207.140.106.nip.io` para la SPA y
-`https://api.52.207.140.106.nip.io` para la API. Ambos nombres necesitan el certificado
-TLS montado en `/etc/letsencrypt`; el workflow lo crea o amplía al desplegar.
-`VITE_API_BASE_URL` debe apuntar al subdominio `api`, sin sufijo de ruta.
+La SPA queda en `http://localhost:5173` (mismo puerto que Vite, así sirven las redirect
+URIs ya registradas en Azure) y el gateway en `http://localhost:8090`.
+`VITE_API_BASE_URL` debe ser `http://localhost:8090`, sin sufijo de ruta.
 
 ```text
-Navegador --> nginx:443 (52.207.140.106.nip.io) --> SPA / MSAL --> Azure Entra
-Navegador --> nginx:443 (api.52.207.140.106.nip.io)
-          --> gateway:8090 (JWT, scope, roles, CORS)
+Navegador --> nginx (localhost:5173) --> SPA / MSAL --> Azure Entra
+Navegador --> gateway (localhost:8090) (JWT, scope, roles, CORS)
           --> bff:8080 (segunda validación JWT y roles)
-          --> orders:8081 / catalog:8082 --> PostgreSQL RDS
+          --> orders:8081 / catalog:8082 --> postgres:5432
 ```
 
-Solo nginx publica los puertos 80 y 443. El dominio de la SPA no reenvía peticiones
-al backend; las rutas `/api/*` y `/me` únicamente se atienden por el gateway en el
-subdominio API. El Bearer y los paths llegan intactos al BFF. Los servicios se
-comunican por los nombres internos de Compose.
+Se publican los puertos 5173 (SPA), 8090 (gateway) y 5432 (PostgreSQL, para
+inspeccionar la base). BFF, orders y catalog solo son accesibles dentro de la red de
+Compose. El Bearer y los paths llegan intactos al BFF.
 
-Para desarrollo sin TLS, levantar cada servicio con Maven, el gateway en 8090 y
-Vite en 5173; configurar `VITE_API_BASE_URL=http://localhost:8090`.
+Para desarrollo sin contenedores, levantar cada servicio con Maven, el gateway en 8090
+y Vite en 5173 con `VITE_API_BASE_URL=http://localhost:8090`.
 
 Los límites iniciales son gateway/BFF 320 MiB cada uno y orders/catalog 448 MiB cada
 uno. Cada JVM limita el heap al 60% de su contenedor; el resto también necesita
-memoria nativa. Revisar `docker stats` después del despliegue en la EC2 de 2 GiB.
+memoria nativa.
 
 Las variables `VITE_` se incorporan durante el build: después de cambiarlas hay que
 reconstruir la imagen del frontend. No contienen contraseñas ni secretos de servidor.

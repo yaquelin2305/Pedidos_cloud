@@ -59,7 +59,7 @@ mvn spring-boot:run
 | Variable | Descripción |
 |---|---|
 | `SERVER_PORT` | Puerto HTTP (por defecto 8081) |
-| `DB_URL` | URL JDBC de la base de datos cloud |
+| `DB_URL` | URL JDBC de PostgreSQL (en Compose, el contenedor `postgres`) |
 | `DB_USERNAME` | Usuario de la base de datos |
 | `DB_PASSWORD` | Password de la base de datos |
 | `JPA_DDL_AUTO` | Estrategia de Hibernate DDL (por defecto validate) |
