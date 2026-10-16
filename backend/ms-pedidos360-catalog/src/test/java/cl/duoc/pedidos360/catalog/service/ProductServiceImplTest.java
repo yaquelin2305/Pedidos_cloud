@@ -14,7 +14,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
+import cl.duoc.pedidos360.catalog.config.CatalogProperties;
 import cl.duoc.pedidos360.catalog.dto.ProductRequestDTO;
 import cl.duoc.pedidos360.catalog.dto.ProductResponseDTO;
 import cl.duoc.pedidos360.catalog.entity.Product;
@@ -25,14 +27,20 @@ import cl.duoc.pedidos360.catalog.repository.ProductRepository;
 @ExtendWith(MockitoExtension.class)
 class ProductServiceImplTest {
 
+    private static final int LOW_STOCK_THRESHOLD = 5;
+
     @Mock
     private ProductRepository productRepository;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     private ProductServiceImpl productService;
 
     @BeforeEach
     void setUp() {
-        productService = new ProductServiceImpl(productRepository);
+        productService = new ProductServiceImpl(productRepository, eventPublisher,
+                new CatalogProperties(LOW_STOCK_THRESHOLD));
     }
 
     private Product activeProduct(Long id, int stock) {

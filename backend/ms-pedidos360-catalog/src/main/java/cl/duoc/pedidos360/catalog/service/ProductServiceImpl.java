@@ -1,7 +1,9 @@
 package cl.duoc.pedidos360.catalog.service;
 
+import java.time.Instant;
 import java.util.UUID;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -9,9 +11,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import lombok.RequiredArgsConstructor;
 
+import cl.duoc.pedidos360.catalog.config.CatalogProperties;
 import cl.duoc.pedidos360.catalog.dto.ProductRequestDTO;
 import cl.duoc.pedidos360.catalog.dto.ProductResponseDTO;
 import cl.duoc.pedidos360.catalog.entity.Product;
+import cl.duoc.pedidos360.catalog.event.StockLowEvent;
 import cl.duoc.pedidos360.catalog.exception.InsufficientStockException;
 import cl.duoc.pedidos360.catalog.exception.ProductNotFoundException;
 import cl.duoc.pedidos360.catalog.repository.ProductRepository;
@@ -21,6 +25,8 @@ import cl.duoc.pedidos360.catalog.repository.ProductRepository;
 public class ProductServiceImpl implements ProductService {
 
     private final ProductRepository productRepository;
+    private final ApplicationEventPublisher eventPublisher;
+    private final CatalogProperties catalogProperties;
 
     @Override
     @Transactional(readOnly = true)
@@ -55,6 +61,7 @@ public class ProductServiceImpl implements ProductService {
     @Transactional
     public ProductResponseDTO update(Long id, ProductRequestDTO request) {
         Product product = findActiveOrThrow(id);
+        int previousStock = product.getStock();
         if (request.sku() != null && !request.sku().isBlank()) {
             product.setSku(request.sku());
         }
@@ -63,7 +70,9 @@ public class ProductServiceImpl implements ProductService {
         product.setPrice(request.price());
         product.setStock(request.stock());
         product.setCategory(request.category());
-        return ProductResponseDTO.from(productRepository.save(product));
+        Product saved = productRepository.save(product);
+        publishIfStockBecameLow(saved, previousStock);
+        return ProductResponseDTO.from(saved);
     }
 
     @Override
@@ -87,8 +96,11 @@ public class ProductServiceImpl implements ProductService {
         if (product.getStock() < quantity) {
             throw new InsufficientStockException(id, product.getStock(), quantity);
         }
-        product.setStock(product.getStock() - quantity);
-        return ProductResponseDTO.from(productRepository.save(product));
+        int previousStock = product.getStock();
+        product.setStock(previousStock - quantity);
+        Product saved = productRepository.save(product);
+        publishIfStockBecameLow(saved, previousStock);
+        return ProductResponseDTO.from(saved);
     }
 
     /**
@@ -99,8 +111,23 @@ public class ProductServiceImpl implements ProductService {
     @Transactional
     public ProductResponseDTO updateStock(Long id, int newStock) {
         Product product = findActiveOrThrow(id);
+        int previousStock = product.getStock();
         product.setStock(newStock);
-        return ProductResponseDTO.from(productRepository.save(product));
+        Product saved = productRepository.save(product);
+        publishIfStockBecameLow(saved, previousStock);
+        return ProductResponseDTO.from(saved);
+    }
+
+    /**
+     * Emite la alerta solo cuando el stock cruza el umbral (antes sobre el, ahora en o bajo el).
+     * Un producto que ya estaba bajo no vuelve a alertar en cada descuento.
+     */
+    private void publishIfStockBecameLow(Product product, int previousStock) {
+        int threshold = catalogProperties.lowStockThreshold();
+        if (previousStock > threshold && product.getStock() <= threshold) {
+            eventPublisher.publishEvent(new StockLowEvent(UUID.randomUUID(), product.getId(), product.getSku(),
+                    product.getName(), product.getStock(), threshold, Instant.now()));
+        }
     }
 
     private Product findActiveOrThrow(Long id) {
