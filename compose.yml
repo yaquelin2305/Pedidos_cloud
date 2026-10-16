@@ -10,24 +10,24 @@ services:
         VITE_AZURE_KNOWN_AUTHORITY: ${VITE_AZURE_KNOWN_AUTHORITY:-}
         VITE_AZURE_REDIRECT_URI: ${VITE_AZURE_REDIRECT_URI:?Define VITE_AZURE_REDIRECT_URI}
         VITE_AZURE_POST_LOGOUT_REDIRECT_URI: ${VITE_AZURE_POST_LOGOUT_REDIRECT_URI:?Define VITE_AZURE_POST_LOGOUT_REDIRECT_URI}
+    # Mismo puerto que Vite para reutilizar las redirect URIs registradas en Azure.
     ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - "5173:80"
     depends_on:
       - gateway
 
   gateway:
     build: ./backend/ms-pedidos360-gateway
     mem_limit: 320m
+    ports:
+      - "8090:8090"
     environment:
       SERVER_PORT: 8090
       JWT_ISSUER_URI: ${JWT_ISSUER_URI:?Define JWT_ISSUER_URI}
       JWT_AUDIENCE: ${JWT_AUDIENCE:?Define JWT_AUDIENCE}
       JWT_REQUIRED_SCOPE: access_as_user
       BFF_BASE_URL: http://bff:8080
-      CORS_ALLOWED_ORIGINS: https://52.207.140.106.nip.io
+      CORS_ALLOWED_ORIGINS: http://localhost:5173
     depends_on:
       - bff
 
@@ -51,13 +51,16 @@ services:
       SERVER_PORT: 8081
       JWT_ISSUER_URI: ${JWT_ISSUER_URI:?Define JWT_ISSUER_URI}
       JWT_AUDIENCE: ${JWT_AUDIENCE:?Define JWT_AUDIENCE}
-      DB_URL: ${DB_URL:?Define DB_URL}
-      DB_USERNAME: ${DB_USERNAME:?Define DB_USERNAME}
-      DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD}
+      DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-pedidos360}
+      DB_USERNAME: ${DB_USERNAME:-pedidos360}
+      DB_PASSWORD: ${DB_PASSWORD:-pedidos360}
       JPA_DDL_AUTO: update
       CATALOG_SERVICE_URL: http://catalog:8082
     depends_on:
-      - catalog
+      postgres:
+        condition: service_healthy
+      catalog:
+        condition: service_started
 
   catalog:
     build: ./backend/ms-pedidos360-catalog
@@ -66,7 +69,29 @@ services:
       SERVER_PORT: 8082
       JWT_ISSUER_URI: ${JWT_ISSUER_URI:?Define JWT_ISSUER_URI}
       JWT_AUDIENCE: ${JWT_AUDIENCE:?Define JWT_AUDIENCE}
-      DB_URL: ${DB_URL:?Define DB_URL}
-      DB_USERNAME: ${DB_USERNAME:?Define DB_USERNAME}
-      DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD}
+      DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-pedidos360}
+      DB_USERNAME: ${DB_USERNAME:-pedidos360}
+      DB_PASSWORD: ${DB_PASSWORD:-pedidos360}
       JPA_DDL_AUTO: update
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-pedidos360}
+      POSTGRES_USER: ${DB_USERNAME:-pedidos360}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-pedidos360}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres-data:
