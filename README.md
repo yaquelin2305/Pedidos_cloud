@@ -48,7 +48,7 @@ TLS montado en `/etc/letsencrypt`; el workflow lo crea o amplía al desplegar.
 ```text
 Navegador --> nginx:443 (52.207.140.106.nip.io) --> SPA / MSAL --> Azure Entra
 Navegador --> nginx:443 (api.52.207.140.106.nip.io)
-          --> gateway:8080 (JWT, scope, roles, CORS)
+          --> gateway:8090 (JWT, scope, roles, CORS)
           --> bff:8080 (segunda validación JWT y roles)
           --> orders:8081 / catalog:8082 --> PostgreSQL RDS
 ```

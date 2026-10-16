@@ -22,7 +22,7 @@ services:
     build: ./backend/ms-pedidos360-gateway
     mem_limit: 320m
     environment:
-      SERVER_PORT: 8080
+      SERVER_PORT: 8090
       JWT_ISSUER_URI: ${JWT_ISSUER_URI:?Define JWT_ISSUER_URI}
       JWT_AUDIENCE: ${JWT_AUDIENCE:?Define JWT_AUDIENCE}
       JWT_REQUIRED_SCOPE: access_as_user
