@@ -47,6 +47,7 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            set -e
             which docker || (sudo dnf install -y docker && sudo systemctl enable --now docker && sudo usermod -aG docker $USER)
             sudo mkdir -p /usr/local/lib/docker/cli-plugins
             sudo docker compose version || (sudo curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 \
@@ -58,10 +59,12 @@ jobs:
             sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx
             cd ~/pedidos360
             DOMAIN=52.207.140.106.nip.io
-            if [ ! -d /etc/letsencrypt/live/$DOMAIN ]; then
+            if [ ! -f /etc/letsencrypt/live/$DOMAIN/fullchain.pem ] ||
+               ! sudo openssl x509 -in /etc/letsencrypt/live/$DOMAIN/fullchain.pem -noout -ext subjectAltName |
+                 tr ',' '\n' | grep -Eq "^[[:space:]]*DNS:api\.${DOMAIN//./\.}[[:space:]]*$"; then
               which certbot || sudo dnf install -y certbot
               sudo docker compose --env-file frontend/.env --env-file .env down 2>/dev/null || true
-              sudo certbot certonly --standalone -d $DOMAIN --non-interactive --agree-tos \
+              sudo certbot certonly --standalone --cert-name $DOMAIN --expand -d $DOMAIN -d api.$DOMAIN --non-interactive --agree-tos \
                 -m ${{ secrets.LETSENCRYPT_EMAIL }}
             fi
             sudo docker compose --env-file frontend/.env --env-file .env up --build -d
