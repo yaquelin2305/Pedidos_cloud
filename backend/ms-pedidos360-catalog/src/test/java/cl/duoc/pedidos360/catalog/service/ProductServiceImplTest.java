@@ -3,6 +3,7 @@ package cl.duoc.pedidos360.catalog.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -12,6 +13,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
@@ -20,6 +22,7 @@ import cl.duoc.pedidos360.catalog.config.CatalogProperties;
 import cl.duoc.pedidos360.catalog.dto.ProductRequestDTO;
 import cl.duoc.pedidos360.catalog.dto.ProductResponseDTO;
 import cl.duoc.pedidos360.catalog.entity.Product;
+import cl.duoc.pedidos360.catalog.event.StockLowEvent;
 import cl.duoc.pedidos360.catalog.exception.InsufficientStockException;
 import cl.duoc.pedidos360.catalog.exception.ProductNotFoundException;
 import cl.duoc.pedidos360.catalog.repository.ProductRepository;
@@ -111,6 +114,78 @@ class ProductServiceImplTest {
 
         assertThat(response.stock()).isEqualTo(6);
         verify(productRepository).save(product);
+    }
+
+    @Test
+    void publicaAlertaCuandoElDescuentoCruzaElUmbral() {
+        Product product = activeProduct(1L, 8);
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        productService.decreaseStock(1L, 4);
+
+        ArgumentCaptor<StockLowEvent> event = ArgumentCaptor.forClass(StockLowEvent.class);
+        verify(eventPublisher).publishEvent(event.capture());
+        assertThat(event.getValue().productId()).isEqualTo(1L);
+        assertThat(event.getValue().stock()).isEqualTo(4);
+        assertThat(event.getValue().threshold()).isEqualTo(LOW_STOCK_THRESHOLD);
+        assertThat(event.getValue().eventId()).isNotNull();
+    }
+
+    @Test
+    void publicaAlertaCuandoElAjusteDejaElStockJustoEnElUmbral() {
+        Product product = activeProduct(1L, 10);
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        productService.updateStock(1L, LOW_STOCK_THRESHOLD);
+
+        verify(eventPublisher).publishEvent(any(StockLowEvent.class));
+    }
+
+    @Test
+    void publicaAlertaCuandoLaEdicionBajaElStockBajoElUmbral() {
+        Product product = activeProduct(1L, 20);
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        ProductRequestDTO request = new ProductRequestDTO("SKU-1", "Teclado", "Teclado mecanico",
+                BigDecimal.valueOf(50), 2, "Perifericos");
+
+        productService.update(1L, request);
+
+        verify(eventPublisher).publishEvent(any(StockLowEvent.class));
+    }
+
+    @Test
+    void noPublicaAlertaSiElStockSigueSobreElUmbral() {
+        Product product = activeProduct(1L, 10);
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        productService.decreaseStock(1L, 4);
+
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void noRepiteLaAlertaSiElStockYaEstabaBajo() {
+        Product product = activeProduct(1L, 4);
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        productService.decreaseStock(1L, 2);
+
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void noPublicaAlertaSiElDescuentoFallaPorStockInsuficiente() {
+        Product product = activeProduct(1L, 8);
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+
+        assertThatThrownBy(() -> productService.decreaseStock(1L, 9))
+                .isInstanceOf(InsufficientStockException.class);
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
