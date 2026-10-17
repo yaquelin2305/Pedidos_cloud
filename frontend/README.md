@@ -57,7 +57,8 @@ de los archivos de ejemplo.
 
 ## Endpoints previstos
 
-Las rutas siguientes ya están expuestas por el BFF y se consumirán mediante `apiClient`.
+El frontend consume las rutas siguientes mediante `apiClient`, a través del gateway (`VITE_API_BASE_URL`),
+que las reenvía al BFF.
 Todas requieren un JWT válido; los roles indicados son los exigidos por la API.
 
 | Método | Ruta | Roles | Resultado |
@@ -80,9 +81,9 @@ productos por API para completar el selector de un pedido.
 
 La creación de pedidos envía únicamente `{ "items": [{ "productId": 10, "quantity": 2 }] }`.
 El backend asigna `customerName` desde el claim `name` del JWT para todos los roles.
-Al integrar, los servicios deberán adaptar el contrato real (`totalAmount`, estados como
-`CREADO` y `ACEPTADO`, IDs numéricos) al modelo de las vistas (`total`, estados en inglés).
-El detalle utiliza `item.subtotal` cuando existe y conserva el cálculo local para fixtures.
+Los servicios adaptan el contrato real (`totalAmount`, estados como `CREADO` y `ACEPTADO`,
+IDs numéricos) al modelo de las vistas (`total`, estados en inglés).
+El detalle utiliza `item.subtotal` cuando existe y, si falta, lo calcula como cantidad por precio unitario.
 
 ## Corrección de estados de pedidos
 
