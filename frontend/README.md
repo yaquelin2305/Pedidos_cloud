@@ -10,11 +10,10 @@ El inicio y cierre de sesión usan MSAL y Azure Entra. Las rutas tienen guards d
 autenticación y rol. `shared/http/apiClient.js` obtiene el access token de la API y
 adjunta `Authorization: Bearer ...` a las peticiones.
 
-Los servicios de pedidos y catálogo todavía usan fixtures en memoria; sus mutaciones
-se pierden al recargar. La conexión de esos servicios al BFF está pendiente. El helper
-`getHttpErrorMessage(error)` de `shared/utils/httpError.js` extrae el mensaje de error
-del backend, con un respaldo cuando no hay respuesta utilizable; aún no está conectado
-a los servicios.
+Los servicios de pedidos y catálogo consumen la API real a través del gateway
+(`VITE_API_BASE_URL`). Cuando una llamada falla, `getHttpErrorMessage(error)` de
+`shared/utils/httpError.js` muestra el mensaje de error del backend, con un respaldo cuando
+no hay respuesta utilizable.
 
 ## Cómo levantarlo
 
