@@ -12,7 +12,8 @@ Valida JWT y permisos antes de reenviar al BFF. No reescribe paths ni sustituye
 | `JWT_ISSUER_URI` | Issuer del tenant; obligatorio |
 | `JWT_AUDIENCE` | Audience de la API; obligatorio |
 | `JWT_REQUIRED_SCOPE` | Scope en `scp`; `access_as_user` |
-| `BFF_BASE_URL` | Destino único; `http://localhost:8080` |
+| `BFF_BASE_URL` | Destino de orders, catalog y `/me`; `http://localhost:8080` |
+| `MQ_ADMIN_BASE_URL` | Destino de `/api/mq/**`; `http://localhost:8083` |
 | `CORS_ALLOWED_ORIGINS` | Orígenes separados por comas; `http://localhost:5173` |
 
 La firma se verifica contra JWKS del issuer; también se validan issuer, expiración,
@@ -38,6 +39,7 @@ Todas las rutas van al BFF con timeout de conexión de 5 s y respuesta de 15 s.
 | POST | /api/catalog/products | Admin |
 | PUT, DELETE | /api/catalog/products/{id} | Admin |
 | PATCH | /api/catalog/products/{id}/stock | Admin, Operator |
+| GET, POST, DELETE | /api/mq/** (administrador de RabbitMQ) | Admin |
 
 Cualquier otra combinación se rechaza. Los permisos coinciden con los controladores
 del BFF; las reglas de negocio y propiedad de pedidos siguen en los servicios.

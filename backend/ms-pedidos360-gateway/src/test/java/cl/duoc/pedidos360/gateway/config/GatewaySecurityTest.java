@@ -1,6 +1,7 @@
 package cl.duoc.pedidos360.gateway.config;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
@@ -65,6 +66,7 @@ class GatewaySecurityTest {
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
         registry.add("BFF_BASE_URL", () -> BFF.url("/").toString());
+        registry.add("MQ_ADMIN_BASE_URL", () -> BFF.url("/").toString());
     }
 
     @AfterAll
@@ -127,7 +129,11 @@ class GatewaySecurityTest {
             {"GET", "/api/catalog/products", "all"}, {"GET", "/api/catalog/products/1", "all"},
             {"POST", "/api/catalog/products", "admin"}, {"PUT", "/api/catalog/products/1", "admin"},
             {"DELETE", "/api/catalog/products/1", "admin"},
-            {"PATCH", "/api/catalog/products/1/stock", "staff"}
+            {"PATCH", "/api/catalog/products/1/stock", "staff"},
+            {"GET", "/api/mq/queues/demo.alerts", "admin"}, {"POST", "/api/mq/queues", "admin"},
+            {"DELETE", "/api/mq/queues/demo.alerts", "admin"}, {"POST", "/api/mq/exchanges", "admin"},
+            {"DELETE", "/api/mq/exchanges/demo.events", "admin"}, {"POST", "/api/mq/bindings", "admin"},
+            {"DELETE", "/api/mq/bindings?exchange=demo.events&queue=demo.alerts&routingKey=demo.%23", "admin"}
         };
         return Stream.of(routes).flatMap(route -> Stream.of("Admin", "Operator", "Customer")
                 .map(role -> Arguments.of(route[0], route[1], role,
@@ -143,7 +149,7 @@ class GatewaySecurityTest {
         if (allowed) {
             BFF.enqueue(new MockResponse().setHeader("Content-Type", "application/json").setBody("{\"ok\":true}"));
         }
-        var response = client.method(HttpMethod.valueOf(method)).uri(path)
+        var response = client.method(HttpMethod.valueOf(method)).uri(URI.create("http://localhost:" + port + path))
                 .header("Authorization", authorization).header("Origin", ORIGIN).exchange();
         response.expectHeader().valueEquals("Access-Control-Allow-Origin", ORIGIN);
         if (allowed) {
@@ -191,6 +197,21 @@ class GatewaySecurityTest {
                 .header("Access-Control-Request-Method", "GET")
                 .exchange().expectStatus().isForbidden()
                 .expectHeader().doesNotExist("Access-Control-Allow-Origin");
+        assertThat(BFF.getRequestCount()).isEqualTo(requests);
+    }
+
+    @Test
+    void rejectsMqAdminWithoutToken() {
+        int requests = BFF.getRequestCount();
+        client.post().uri("/api/mq/queues").exchange().expectStatus().isUnauthorized();
+        assertThat(BFF.getRequestCount()).isEqualTo(requests);
+    }
+
+    @Test
+    void rejectsMqMethodsOutsideTheAdminApi() {
+        int requests = BFF.getRequestCount();
+        client.put().uri("/api/mq/queues/demo.alerts").header("Authorization", "Bearer " + TOKENS.valid(List.of("Admin")))
+                .exchange().expectStatus().isForbidden();
         assertThat(BFF.getRequestCount()).isEqualTo(requests);
     }
 

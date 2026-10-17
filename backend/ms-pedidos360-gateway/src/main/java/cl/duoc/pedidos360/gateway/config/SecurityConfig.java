@@ -54,6 +54,9 @@ public class SecurityConfig {
                         .pathMatchers(HttpMethod.POST, "/api/catalog/products").hasRole("Admin")
                         .pathMatchers(HttpMethod.PUT, "/api/catalog/products/{id}").hasRole("Admin")
                         .pathMatchers(HttpMethod.DELETE, "/api/catalog/products/{id}").hasRole("Admin")
+                        .pathMatchers(HttpMethod.GET, "/api/mq/**").hasRole("Admin")
+                        .pathMatchers(HttpMethod.POST, "/api/mq/**").hasRole("Admin")
+                        .pathMatchers(HttpMethod.DELETE, "/api/mq/**").hasRole("Admin")
                         .anyExchange().denyAll())
                 .oauth2ResourceServer(oauth -> oauth
                         .authenticationEntryPoint(entryPoint)

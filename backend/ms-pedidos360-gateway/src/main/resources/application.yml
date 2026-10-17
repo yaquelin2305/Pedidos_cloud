@@ -23,6 +23,10 @@ spring:
               uri: ${BFF_BASE_URL:http://localhost:8080}
               predicates:
                 - Path=/me
+            - id: mq-admin
+              uri: ${MQ_ADMIN_BASE_URL:http://localhost:8083}
+              predicates:
+                - Path=/api/mq/**
           httpclient:
             connect-timeout: 5000
             response-timeout: 15s
