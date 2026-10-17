@@ -1,6 +1,19 @@
 spring:
   application:
     name: ms-pedidos360-orders
+  rabbitmq:
+    addresses: ${RABBITMQ_ADDRESSES:localhost:5672}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 10
+        default-requeue-rejected: false
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
@@ -21,3 +34,24 @@ server:
 catalog:
   service:
     url: ${CATALOG_SERVICE_URL:http://localhost:8082}
+
+pedidos360:
+  messaging:
+    exchange: pedidos360.orders.events
+    dead-letter-exchange: pedidos360.dlx
+    delivery-limit: 3
+    notifications:
+      queue: pedidos360.orders.notifications
+      dead-letter-queue: pedidos360.orders.notifications.dlq
+      routing-key: order.#
+    tickets:
+      queue: pedidos360.orders.tickets
+      dead-letter-queue: pedidos360.orders.tickets.dlq
+      routing-key: order.accepted
+    routing-keys:
+      CREADO: order.created
+      ACEPTADO: order.accepted
+      EN_PREPARACION: order.preparing
+      DESPACHADO: order.dispatched
+      ENTREGADO: order.delivered
+      CANCELADO: order.cancelled
