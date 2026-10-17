@@ -55,7 +55,7 @@ Navegador --> gateway (localhost:8090) (JWT, scope, roles, CORS)
 ```
 
 Se publican los puertos 5173 (SPA), 8090 (gateway), 5432 (PostgreSQL, para
-inspeccionar la base) y 15672 (consola de RabbitMQ, solo en `127.0.0.1`). BFF, orders, catalog y mq-admin solo son accesibles dentro de la
+inspeccionar la base, solo en `127.0.0.1`) y 15672 (consola de RabbitMQ, solo en `127.0.0.1`). BFF, orders, catalog y mq-admin solo son accesibles dentro de la
 red de Compose. El Bearer y los paths llegan intactos al BFF.
 
 Para desarrollo sin contenedores, levantar cada servicio con Maven, el gateway en 8090
