@@ -1,11 +1,15 @@
 package cl.duoc.pedidos360.mqadmin.service;
 
 import java.util.Locale;
+import java.util.function.Supplier;
 
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.ShutdownSignalException;
 
+import org.springframework.amqp.AmqpAuthenticationException;
+import org.springframework.amqp.AmqpConnectException;
 import org.springframework.amqp.AmqpException;
+import org.springframework.amqp.AmqpTimeoutException;
 import org.springframework.amqp.core.AmqpAdmin;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.Exchange;
@@ -28,6 +32,7 @@ import cl.duoc.pedidos360.mqadmin.dto.ExchangeResponseDTO;
 import cl.duoc.pedidos360.mqadmin.dto.QueueRequestDTO;
 import cl.duoc.pedidos360.mqadmin.dto.QueueResponseDTO;
 import cl.duoc.pedidos360.mqadmin.dto.QueueType;
+import cl.duoc.pedidos360.mqadmin.exception.BrokerUnavailableException;
 import cl.duoc.pedidos360.mqadmin.exception.ProtectedResourceException;
 import cl.duoc.pedidos360.mqadmin.exception.ResourceConflictException;
 import cl.duoc.pedidos360.mqadmin.exception.ResourceNotFoundException;
@@ -55,56 +60,67 @@ public class RabbitAdminServiceImpl implements RabbitAdminService {
 
     @Override
     public QueueResponseDTO createQueue(QueueRequestDTO request) {
-        if (amqpAdmin.getQueueInfo(request.name()) != null) {
-            throw new ResourceConflictException("La cola ya existe: " + request.name());
-        }
-        amqpAdmin.declareQueue(toQueue(request));
-        log.info("Cola creada: {} ({}, durable={})", request.name(), request.type(), request.durable());
-        return getQueue(request.name());
+        return onBroker(() -> {
+            if (amqpAdmin.getQueueInfo(request.name()) != null) {
+                throw new ResourceConflictException("La cola ya existe: " + request.name());
+            }
+            amqpAdmin.declareQueue(toQueue(request));
+            log.info("Cola creada: {} ({}, durable={})", request.name(), request.type(), request.durable());
+            return toResponse(requireQueue(request.name()));
+        });
     }
 
     @Override
     public QueueResponseDTO getQueue(String name) {
-        QueueInformation info = requireQueue(name);
-        return new QueueResponseDTO(info.getName(), info.getMessageCount(), info.getConsumerCount());
+        return onBroker(() -> toResponse(requireQueue(name)));
     }
 
     @Override
     public void deleteQueue(String name) {
         rejectIfProtected(name, "La cola " + name + " es parte de la topologia del sistema");
-        requireQueue(name);
-        amqpAdmin.deleteQueue(name);
-        log.info("Cola eliminada: {}", name);
+        onBroker(() -> {
+            requireQueue(name);
+            amqpAdmin.deleteQueue(name);
+            log.info("Cola eliminada: {}", name);
+            return null;
+        });
     }
 
     @Override
     public ExchangeResponseDTO createExchange(ExchangeRequestDTO request) {
-        if (exchangeExists(request.name())) {
-            throw new ResourceConflictException("El exchange ya existe: " + request.name());
-        }
-        Exchange exchange = new ExchangeBuilder(request.name(), request.type().name().toLowerCase(Locale.ROOT))
-                .durable(request.durable())
-                .build();
-        amqpAdmin.declareExchange(exchange);
-        log.info("Exchange creado: {} ({}, durable={})", request.name(), request.type(), request.durable());
-        return new ExchangeResponseDTO(request.name(), request.type(), request.durable());
+        return onBroker(() -> {
+            if (exchangeExists(request.name())) {
+                throw new ResourceConflictException("El exchange ya existe: " + request.name());
+            }
+            Exchange exchange = new ExchangeBuilder(request.name(), request.type().name().toLowerCase(Locale.ROOT))
+                    .durable(request.durable())
+                    .build();
+            amqpAdmin.declareExchange(exchange);
+            log.info("Exchange creado: {} ({}, durable={})", request.name(), request.type(), request.durable());
+            return new ExchangeResponseDTO(request.name(), request.type(), request.durable());
+        });
     }
 
     @Override
     public void deleteExchange(String name) {
         rejectIfProtected(name, "El exchange " + name + " es parte de la topologia del sistema");
-        requireExchange(name);
-        amqpAdmin.deleteExchange(name);
-        log.info("Exchange eliminado: {}", name);
+        onBroker(() -> {
+            requireExchange(name);
+            amqpAdmin.deleteExchange(name);
+            log.info("Exchange eliminado: {}", name);
+            return null;
+        });
     }
 
     @Override
     public BindingResponseDTO createBinding(BindingRequestDTO request) {
-        requireExchange(request.exchange());
-        requireQueue(request.queue());
-        amqpAdmin.declareBinding(toBinding(request.exchange(), request.queue(), request.routingKey()));
-        log.info("Binding creado: {} -> {} [{}]", request.exchange(), request.queue(), request.routingKey());
-        return new BindingResponseDTO(request.exchange(), request.queue(), request.routingKey());
+        return onBroker(() -> {
+            requireExchange(request.exchange());
+            requireQueue(request.queue());
+            amqpAdmin.declareBinding(toBinding(request.exchange(), request.queue(), request.routingKey()));
+            log.info("Binding creado: {} -> {} [{}]", request.exchange(), request.queue(), request.routingKey());
+            return new BindingResponseDTO(request.exchange(), request.queue(), request.routingKey());
+        });
     }
 
     @Override
@@ -113,10 +129,52 @@ public class RabbitAdminServiceImpl implements RabbitAdminService {
             throw new ProtectedResourceException(
                     "El binding " + exchange + " -> " + queue + " es parte de la topologia del sistema");
         }
-        requireExchange(exchange);
-        requireQueue(queue);
-        amqpAdmin.removeBinding(toBinding(exchange, queue, routingKey));
-        log.info("Binding eliminado: {} -> {} [{}]", exchange, queue, routingKey);
+        onBroker(() -> {
+            requireExchange(exchange);
+            requireQueue(queue);
+            amqpAdmin.removeBinding(toBinding(exchange, queue, routingKey));
+            log.info("Binding eliminado: {} -> {} [{}]", exchange, queue, routingKey);
+            return null;
+        });
+    }
+
+    /**
+     * Ejecuta una operacion contra el broker y traduce sus errores a excepciones del administrador:
+     *
+     * <table>
+     *   <caption>Traduccion de errores del broker</caption>
+     *   <tr><th>Error del broker</th><th>Excepcion</th></tr>
+     *   <tr><td>Canal cerrado con 404 NOT_FOUND</td><td>{@link ResourceNotFoundException}</td></tr>
+     *   <tr><td>Canal cerrado con 406 PRECONDITION_FAILED: el recurso ya existe con otros
+     *       argumentos</td><td>{@link ResourceConflictException}</td></tr>
+     *   <tr><td>Sin conexion, autenticacion rechazada o tiempo agotado</td>
+     *       <td>{@link BrokerUnavailableException}</td></tr>
+     * </table>
+     *
+     * <p>El cierre de canal se revisa primero porque Spring AMQP tambien lo envuelve en
+     * {@link AmqpConnectException}, y no significa que el broker este caido.
+     */
+    private <T> T onBroker(Supplier<T> operation) {
+        try {
+            return operation.get();
+        } catch (AmqpException ex) {
+            AMQP.Channel.Close close = channelClose(ex);
+            if (close != null && close.getReplyCode() == AMQP.NOT_FOUND) {
+                throw new ResourceNotFoundException(close.getReplyText());
+            }
+            if (close != null && close.getReplyCode() == AMQP.PRECONDITION_FAILED) {
+                throw new ResourceConflictException(close.getReplyText());
+            }
+            if (ex instanceof AmqpConnectException || ex instanceof AmqpAuthenticationException
+                    || ex instanceof AmqpTimeoutException) {
+                throw new BrokerUnavailableException("RabbitMQ no esta disponible", ex);
+            }
+            throw ex;
+        }
+    }
+
+    private QueueResponseDTO toResponse(QueueInformation info) {
+        return new QueueResponseDTO(info.getName(), info.getMessageCount(), info.getConsumerCount());
     }
 
     private Queue toQueue(QueueRequestDTO request) {
@@ -164,7 +222,8 @@ public class RabbitAdminServiceImpl implements RabbitAdminService {
             rabbitTemplate.execute(channel -> channel.exchangeDeclarePassive(name));
             return true;
         } catch (AmqpException ex) {
-            if (channelReplyCode(ex) == AMQP.NOT_FOUND) {
+            AMQP.Channel.Close close = channelClose(ex);
+            if (close != null && close.getReplyCode() == AMQP.NOT_FOUND) {
                 return false;
             }
             throw ex;
@@ -172,16 +231,17 @@ public class RabbitAdminServiceImpl implements RabbitAdminService {
     }
 
     /**
-     * Codigo con que el broker cerro el canal (404, 406...), o -1 si el error no vino de un cierre
-     * de canal. Spring AMQP envuelve la {@link ShutdownSignalException} original en otras excepciones.
+     * Cierre de canal con que el broker rechazo la operacion (404, 406...), o null si el error no
+     * vino de un cierre de canal. Spring AMQP envuelve la {@link ShutdownSignalException} original
+     * en otras excepciones.
      */
-    private static int channelReplyCode(Throwable error) {
+    private static AMQP.Channel.Close channelClose(Throwable error) {
         for (Throwable cause = error; cause != null; cause = cause.getCause()) {
             if (cause instanceof ShutdownSignalException signal
                     && signal.getReason() instanceof AMQP.Channel.Close close) {
-                return close.getReplyCode();
+                return close;
             }
         }
-        return -1;
+        return null;
     }
 }
