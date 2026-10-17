@@ -21,6 +21,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.context.ApplicationEventPublisher;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -30,6 +32,7 @@ import cl.duoc.pedidos360.orders.dto.OrderResponseDTO;
 import cl.duoc.pedidos360.orders.entity.Order;
 import cl.duoc.pedidos360.orders.entity.OrderItem;
 import cl.duoc.pedidos360.orders.entity.OrderStatus;
+import cl.duoc.pedidos360.orders.event.OrderEvent;
 import cl.duoc.pedidos360.orders.exception.ForbiddenOrderAccessException;
 import cl.duoc.pedidos360.orders.exception.InvalidOrderStatusTransitionException;
 import cl.duoc.pedidos360.orders.exception.StockUnavailableException;
@@ -48,17 +51,21 @@ class OrderServiceImplTest {
     @Mock
     private CatalogClient catalogClient;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private OrderServiceImpl orderService;
 
     @BeforeEach
     void setUp() {
-        orderService = new OrderServiceImpl(orderRepository, catalogClient);
+        orderService = new OrderServiceImpl(orderRepository, catalogClient, eventPublisher);
     }
 
     private Order order(Long id, String customerId, OrderStatus status) {
         Order order = Order.builder()
                 .id(id)
                 .customerId(customerId)
+                .customerName("Ana Torres")
                 .status(status)
                 .totalAmount(BigDecimal.valueOf(100))
                 .build();
@@ -91,6 +98,7 @@ class OrderServiceImplTest {
         assertThat(response.totalAmount()).isEqualByComparingTo(BigDecimal.valueOf(100));
         assertThat(response.items()).hasSize(1);
         assertThat(response.items().get(0).productName()).isEqualTo("Teclado");
+        assertEvent(null, OrderStatus.CREADO);
     }
 
     @Test
@@ -103,6 +111,7 @@ class OrderServiceImplTest {
 
         assertThat(response.status()).isEqualTo(OrderStatus.ACEPTADO);
         verify(catalogClient).decreaseStock(10L, 2);
+        assertEvent(OrderStatus.CREADO, OrderStatus.ACEPTADO);
     }
 
     @Test
@@ -116,6 +125,7 @@ class OrderServiceImplTest {
                 .isInstanceOf(StockUnavailableException.class);
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CREADO);
+        verifyNoInteractions(eventPublisher);
         verify(orderRepository, never()).save(any(Order.class));
     }
 
@@ -127,6 +137,7 @@ class OrderServiceImplTest {
         assertThatThrownBy(() -> orderService.changeStatus(1L, OrderStatus.DESPACHADO, OPERATOR))
                 .isInstanceOf(InvalidOrderStatusTransitionException.class);
         verify(catalogClient, never()).decreaseStock(any(), anyInt());
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test
@@ -188,6 +199,7 @@ class OrderServiceImplTest {
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.ACEPTADO);
         assertThat(order.getAcceptedAt()).isEqualTo(accepted);
+        assertEvent(OrderStatus.EN_PREPARACION, OrderStatus.ACEPTADO);
         verifyNoInteractions(catalogClient);
     }
 
@@ -233,6 +245,55 @@ class OrderServiceImplTest {
     void unClienteNoPuedeCorregirEstadosAunqueSeaSuPedido() {
         assertThatThrownBy(() -> orderService.changeStatus(1L, OrderStatus.DESPACHADO, CUSTOMER))
                 .isInstanceOf(AccessDeniedException.class);
-        verifyNoInteractions(orderRepository, catalogClient);
+        verifyNoInteractions(orderRepository, catalogClient, eventPublisher);
+    }
+
+    @Test
+    void publishesCancellationAfterSaving() {
+        Order order = order(1L, CUSTOMER.customerId(), OrderStatus.CREADO);
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThat(orderService.cancel(1L, CUSTOMER).status()).isEqualTo(OrderStatus.CANCELADO);
+
+        assertEvent(OrderStatus.CREADO, OrderStatus.CANCELADO);
+        var inOrder = org.mockito.Mockito.inOrder(orderRepository, eventPublisher);
+        inOrder.verify(orderRepository).save(order);
+        inOrder.verify(eventPublisher).publishEvent(any(OrderEvent.class));
+        verifyNoInteractions(catalogClient);
+    }
+
+    @Test
+    void doesNotPublishRejectedCancellation() {
+        when(orderRepository.findById(1L))
+                .thenReturn(Optional.of(order(1L, CUSTOMER.customerId(), OrderStatus.ACEPTADO)));
+
+        assertThatThrownBy(() -> orderService.cancel(1L, CUSTOMER))
+                .isInstanceOf(InvalidOrderStatusTransitionException.class);
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    void doesNotPublishWhenSaveFails() {
+        when(orderRepository.findById(1L))
+                .thenReturn(Optional.of(order(1L, CUSTOMER.customerId(), OrderStatus.CREADO)));
+        when(orderRepository.save(any(Order.class))).thenThrow(new IllegalStateException("BD no disponible"));
+
+        assertThatThrownBy(() -> orderService.cancel(1L, CUSTOMER)).isInstanceOf(IllegalStateException.class);
+        verifyNoInteractions(eventPublisher);
+    }
+
+    private void assertEvent(OrderStatus previousStatus, OrderStatus status) {
+        ArgumentCaptor<OrderEvent> captured = ArgumentCaptor.forClass(OrderEvent.class);
+        verify(eventPublisher).publishEvent(captured.capture());
+        OrderEvent event = captured.getValue();
+        assertThat(event.eventId()).isNotNull();
+        assertThat(event.orderId()).isEqualTo(1L);
+        assertThat(event.customerId()).isEqualTo(CUSTOMER.customerId());
+        assertThat(event.customerName()).isEqualTo(CUSTOMER.customerName());
+        assertThat(event.previousStatus()).isEqualTo(previousStatus);
+        assertThat(event.status()).isEqualTo(status);
+        assertThat(event.totalAmount()).isEqualByComparingTo("100");
+        assertThat(event.occurredAt()).isNotNull();
     }
 }

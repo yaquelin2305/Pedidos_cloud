@@ -5,8 +5,10 @@ import java.time.Instant;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 import org.springframework.stereotype.Service;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +19,7 @@ import cl.duoc.pedidos360.orders.dto.OrderResponseDTO;
 import cl.duoc.pedidos360.orders.entity.Order;
 import cl.duoc.pedidos360.orders.entity.OrderItem;
 import cl.duoc.pedidos360.orders.entity.OrderStatus;
+import cl.duoc.pedidos360.orders.event.OrderEvent;
 import cl.duoc.pedidos360.orders.exception.ForbiddenOrderAccessException;
 import cl.duoc.pedidos360.orders.exception.InvalidOrderStatusTransitionException;
 import cl.duoc.pedidos360.orders.exception.OrderNotFoundException;
@@ -35,6 +38,7 @@ public class OrderServiceImpl implements OrderService {
 
     private final OrderRepository orderRepository;
     private final CatalogClient catalogClient;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional(readOnly = true)
@@ -76,7 +80,9 @@ public class OrderServiceImpl implements OrderService {
         }
         order.setTotalAmount(total);
 
-        return OrderResponseDTO.from(orderRepository.save(order));
+        Order saved = orderRepository.save(order);
+        publishOrderEvent(saved, null);
+        return OrderResponseDTO.from(saved);
     }
 
     /**
@@ -120,7 +126,9 @@ public class OrderServiceImpl implements OrderService {
         }
 
         order.setStatus(newStatus);
-        return OrderResponseDTO.from(orderRepository.save(order));
+        Order saved = orderRepository.save(order);
+        publishOrderEvent(saved, previousStatus);
+        return OrderResponseDTO.from(saved);
     }
 
     @Override
@@ -133,7 +141,14 @@ public class OrderServiceImpl implements OrderService {
             throw new InvalidOrderStatusTransitionException(previousStatus, OrderStatus.CANCELADO);
         }
         order.setStatus(OrderStatus.CANCELADO);
-        return OrderResponseDTO.from(orderRepository.save(order));
+        Order saved = orderRepository.save(order);
+        publishOrderEvent(saved, previousStatus);
+        return OrderResponseDTO.from(saved);
+    }
+
+    private void publishOrderEvent(Order order, OrderStatus previousStatus) {
+        eventPublisher.publishEvent(new OrderEvent(UUID.randomUUID(), order.getId(), order.getCustomerId(),
+                order.getCustomerName(), previousStatus, order.getStatus(), order.getTotalAmount(), Instant.now()));
     }
 
     private Order findWithOwnershipCheck(Long id, OrderRequester requester) {
