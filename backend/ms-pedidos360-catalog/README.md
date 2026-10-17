@@ -26,10 +26,11 @@ Todas las rutas exigen un JWT válido emitido por el IDaaS (Azure Entra).
   concurrencia, dos descuentos simultáneos podrían leer el mismo stock y perder una de las dos
   actualizaciones. Con `@Version`, la segunda transacción en confirmar falla con
   `OptimisticLockException` en vez de corromper el dato.
-- **`ddl-auto=validate`** por defecto: en un entorno cloud compartido por el equipo, dejar que Hibernate
-  modifique el esquema automáticamente (`update`) es riesgoso — un despliegue puede alterar la estructura
-  sin control de versiones. `validate` obliga a que el esquema exista de antemano (migración manual o
-  futura herramienta de migraciones) y solo verifica que las entidades coincidan con él.
+- **`ddl-auto=validate`** por defecto: en una base compartida, dejar que Hibernate modifique el esquema
+  automáticamente (`update`) es riesgoso — un despliegue puede alterar la estructura sin control de
+  versiones. `validate` obliga a que el esquema exista de antemano y solo verifica que las entidades
+  coincidan con él. El Compose de la raíz usa `JPA_DDL_AUTO=update` porque levanta un PostgreSQL local y
+  vacío, donde las tablas se crean al primer arranque.
 
 ## Mensajería (RabbitMQ)
 
