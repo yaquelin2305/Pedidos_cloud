@@ -20,6 +20,7 @@ import org.springframework.util.StringUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import cl.duoc.pedidos360.mqadmin.config.MqAdminProperties;
 import cl.duoc.pedidos360.mqadmin.dto.BindingRequestDTO;
 import cl.duoc.pedidos360.mqadmin.dto.BindingResponseDTO;
 import cl.duoc.pedidos360.mqadmin.dto.ExchangeRequestDTO;
@@ -27,6 +28,7 @@ import cl.duoc.pedidos360.mqadmin.dto.ExchangeResponseDTO;
 import cl.duoc.pedidos360.mqadmin.dto.QueueRequestDTO;
 import cl.duoc.pedidos360.mqadmin.dto.QueueResponseDTO;
 import cl.duoc.pedidos360.mqadmin.dto.QueueType;
+import cl.duoc.pedidos360.mqadmin.exception.ProtectedResourceException;
 import cl.duoc.pedidos360.mqadmin.exception.ResourceConflictException;
 import cl.duoc.pedidos360.mqadmin.exception.ResourceNotFoundException;
 
@@ -37,6 +39,10 @@ import cl.duoc.pedidos360.mqadmin.exception.ResourceNotFoundException;
  * <p>{@link AmqpAdmin} informa si una cola existe ({@code getQueueInfo} devuelve null), pero no
  * tiene un equivalente para exchanges: su existencia se comprueba con una declaracion pasiva, que
  * el broker responde con 404 si el exchange no existe.
+ *
+ * <p>Los nombres de {@link MqAdminProperties#protectedNames()} no se pueden eliminar, y un binding
+ * entre dos recursos protegidos tampoco se puede quitar: son las rutas de las que dependen orders y
+ * catalog. Si se pueden agregar bindings nuevos sobre ellos, porque no cambian las rutas existentes.
  */
 @Slf4j
 @Service
@@ -45,6 +51,7 @@ public class RabbitAdminServiceImpl implements RabbitAdminService {
 
     private final AmqpAdmin amqpAdmin;
     private final RabbitTemplate rabbitTemplate;
+    private final MqAdminProperties properties;
 
     @Override
     public QueueResponseDTO createQueue(QueueRequestDTO request) {
@@ -64,6 +71,7 @@ public class RabbitAdminServiceImpl implements RabbitAdminService {
 
     @Override
     public void deleteQueue(String name) {
+        rejectIfProtected(name, "La cola " + name + " es parte de la topologia del sistema");
         requireQueue(name);
         amqpAdmin.deleteQueue(name);
         log.info("Cola eliminada: {}", name);
@@ -84,6 +92,7 @@ public class RabbitAdminServiceImpl implements RabbitAdminService {
 
     @Override
     public void deleteExchange(String name) {
+        rejectIfProtected(name, "El exchange " + name + " es parte de la topologia del sistema");
         requireExchange(name);
         amqpAdmin.deleteExchange(name);
         log.info("Exchange eliminado: {}", name);
@@ -100,6 +109,10 @@ public class RabbitAdminServiceImpl implements RabbitAdminService {
 
     @Override
     public void deleteBinding(String exchange, String queue, String routingKey) {
+        if (properties.isProtected(exchange) && properties.isProtected(queue)) {
+            throw new ProtectedResourceException(
+                    "El binding " + exchange + " -> " + queue + " es parte de la topologia del sistema");
+        }
         requireExchange(exchange);
         requireQueue(queue);
         amqpAdmin.removeBinding(toBinding(exchange, queue, routingKey));
@@ -124,6 +137,12 @@ public class RabbitAdminServiceImpl implements RabbitAdminService {
 
     private Binding toBinding(String exchange, String queue, String routingKey) {
         return new Binding(queue, Binding.DestinationType.QUEUE, exchange, routingKey, null);
+    }
+
+    private void rejectIfProtected(String name, String message) {
+        if (properties.isProtected(name)) {
+            throw new ProtectedResourceException(message);
+        }
     }
 
     private QueueInformation requireQueue(String name) {

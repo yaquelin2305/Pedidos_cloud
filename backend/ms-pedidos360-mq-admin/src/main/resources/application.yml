@@ -14,3 +14,17 @@ spring:
 
 server:
   port: ${SERVER_PORT:8083}
+
+pedidos360:
+  mq-admin:
+    # Topologia de orders y catalog: el administrador no puede eliminarla ni desligarla.
+    protected-names:
+      - pedidos360.orders.events
+      - pedidos360.catalog.events
+      - pedidos360.dlx
+      - pedidos360.orders.notifications
+      - pedidos360.orders.notifications.dlq
+      - pedidos360.orders.tickets
+      - pedidos360.orders.tickets.dlq
+      - pedidos360.catalog.stock-alerts
+      - pedidos360.catalog.stock-alerts.dlq

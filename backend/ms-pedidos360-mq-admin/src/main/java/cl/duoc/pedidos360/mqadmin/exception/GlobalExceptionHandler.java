@@ -36,6 +36,11 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.CONFLICT, ex.getMessage(), request);
     }
 
+    @ExceptionHandler(ProtectedResourceException.class)
+    public ResponseEntity<ApiErrorResponse> handleProtected(ProtectedResourceException ex, WebRequest request) {
+        return build(HttpStatus.CONFLICT, ex.getMessage(), request);
+    }
+
     /** Errores del cuerpo: cada campo con su mensaje, incluidas las validaciones cruzadas del DTO. */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiErrorResponse> handleBodyValidation(MethodArgumentNotValidException ex,
