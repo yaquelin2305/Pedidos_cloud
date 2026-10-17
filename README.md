@@ -1,7 +1,7 @@
 # Pedidos360
 
-Sistema de gestión de pedidos con arquitectura cloud native. Monorepo con el frontend y los cuatro
-microservicios de backend.
+Sistema de gestión de pedidos con arquitectura cloud native. Monorepo con el frontend y los cinco
+servicios de backend.
 
 | Componente | Ruta | Descripción |
 |---|---|---|
@@ -10,6 +10,7 @@ microservicios de backend.
 | BFF | `backend/ms-pedidos360-bff/` | Spring Boot, valida el JWT y enruta a los microservicios de dominio |
 | Orders | `backend/ms-pedidos360-orders/` | Spring Boot, CRUD de pedidos y estados |
 | Catalog | `backend/ms-pedidos360-catalog/` | Spring Boot, CRUD de productos y stock |
+| MQ Admin | `backend/ms-pedidos360-mq-admin/` | Spring Boot, API REST para administrar colas, exchanges y bindings de RabbitMQ |
 
 ## Stack
 
@@ -25,7 +26,7 @@ exige base de datos por servicio.
 
 ## Docker Compose
 
-El Compose de la raíz construye frontend, gateway, BFF, orders y catalog, y levanta
+El Compose de la raíz construye frontend, gateway, BFF, orders, catalog y mq-admin, y levanta
 PostgreSQL y un clúster RabbitMQ de dos nodos. Todo corre en localhost; Azure Entra es el único
 servicio externo.
 
@@ -50,17 +51,18 @@ Navegador --> nginx (localhost:5173) --> SPA / MSAL --> Azure Entra
 Navegador --> gateway (localhost:8090) (JWT, scope, roles, CORS)
           --> bff:8080 (segunda validación JWT y roles)
           --> orders:8081 / catalog:8082 --> postgres:5432
+          --> mq-admin:8083 (/api/mq/**, solo Admin) --> rabbitmq-1 / rabbitmq-2
 ```
 
 Se publican los puertos 5173 (SPA), 8090 (gateway), 5432 (PostgreSQL, para
-inspeccionar la base) y 15672 (consola de RabbitMQ, solo en `127.0.0.1`). BFF, orders y catalog solo son accesibles dentro de la red de
-Compose. El Bearer y los paths llegan intactos al BFF.
+inspeccionar la base) y 15672 (consola de RabbitMQ, solo en `127.0.0.1`). BFF, orders, catalog y mq-admin solo son accesibles dentro de la
+red de Compose. El Bearer y los paths llegan intactos al BFF.
 
 Para desarrollo sin contenedores, levantar cada servicio con Maven, el gateway en 8090
 y Vite en 5173 con `VITE_API_BASE_URL=http://localhost:8090`.
 
-Los límites iniciales son gateway/BFF 320 MiB cada uno y orders/catalog 448 MiB cada
-uno. Cada JVM limita el heap al 60% de su contenedor; el resto también necesita
+Los límites iniciales son gateway, BFF y mq-admin 320 MiB cada uno y orders/catalog 448 MiB
+cada uno. Cada JVM limita el heap al 60% de su contenedor; el resto también necesita
 memoria nativa.
 
 Las variables `VITE_` se incorporan durante el build: después de cambiarlas hay que
@@ -102,3 +104,5 @@ docker volume rm pedidos_cloud_rabbitmq-1-data pedidos_cloud_rabbitmq-2-data
 ```
 
 La topología, el flujo de mensajes y la política de errores de cada servicio están en su README.
+`ms-pedidos360-mq-admin` permite crear, consultar y eliminar colas, exchanges y bindings a través
+del gateway (`/api/mq/**`, rol Admin), sin poder eliminar la topología de orders y catalog.
