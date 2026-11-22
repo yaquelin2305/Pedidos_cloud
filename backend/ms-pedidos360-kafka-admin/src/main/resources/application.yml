@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: ms-pedidos360-kafka-admin
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092,localhost:9093,localhost:9094}
+    admin:
+      properties:
+        # Con los brokers caidos el administrador responde 503 en pocos segundos en vez de colgarse.
+        request.timeout.ms: 10000
+        default.api.timeout.ms: 15000
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI}
+          audiences: ${JWT_AUDIENCE}
+
+server:
+  port: ${SERVER_PORT:8084}
+
+pedidos360:
+  kafka-admin:
+    # Topicos del sistema: el administrador no puede eliminarlos (sus configuraciones si se pueden
+    # modificar). Tampoco se pueden eliminar los internos de Kafka, que empiezan con "_".
+    protected-topics:
+      - pedidos360.orders.events
+      - pedidos360.orders.events.DLT
+      - pedidos360.catalog.stock
+      - pedidos360.catalog.stock.DLT
