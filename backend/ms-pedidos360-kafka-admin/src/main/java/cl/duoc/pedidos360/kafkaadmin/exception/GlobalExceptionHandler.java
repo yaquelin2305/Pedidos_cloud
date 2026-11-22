@@ -3,6 +3,7 @@ package cl.duoc.pedidos360.kafkaadmin.exception;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
@@ -13,6 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.validation.method.ParameterErrors;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -76,14 +78,26 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, message, request);
     }
 
-    /** Errores de los nombres recibidos en la ruta o en la query. */
+    /**
+     * Errores de validacion de los parametros del metodo. Cuando el endpoint valida un nombre de la
+     * ruta y tambien un cuerpo {@code @Valid}, Spring informa ambos por esta via: los errores de un
+     * cuerpo se rotulan con el nombre de su campo y los de un parametro simple con el del parametro.
+     */
     @ExceptionHandler(HandlerMethodValidationException.class)
     public ResponseEntity<ApiErrorResponse> handleParameterValidation(HandlerMethodValidationException ex,
             WebRequest request) {
         String message = ex.getParameterValidationResults().stream()
-                .flatMap(result -> result.getResolvableErrors().stream()
-                        .map(error -> result.getMethodParameter().getParameterName() + ": "
-                                + error.getDefaultMessage()))
+                .flatMap(result -> {
+                    if (result instanceof ParameterErrors errors) {
+                        return Stream.concat(
+                                errors.getFieldErrors().stream()
+                                        .map(error -> error.getField() + ": " + error.getDefaultMessage()),
+                                errors.getGlobalErrors().stream().map(error -> error.getDefaultMessage()));
+                    }
+                    return result.getResolvableErrors().stream()
+                            .map(error -> result.getMethodParameter().getParameterName() + ": "
+                                    + error.getDefaultMessage());
+                })
                 .collect(Collectors.joining("; "));
         return build(HttpStatus.BAD_REQUEST, message, request);
     }
