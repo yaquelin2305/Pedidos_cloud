@@ -43,6 +43,7 @@ import org.springframework.stereotype.Service;
 
 import lombok.RequiredArgsConstructor;
 
+import cl.duoc.pedidos360.kafkaadmin.config.KafkaAdminProperties;
 import cl.duoc.pedidos360.kafkaadmin.dto.BrokerDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.ClusterResponseDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.ConfigChangeDTO;
@@ -62,6 +63,7 @@ import cl.duoc.pedidos360.kafkaadmin.dto.TopicPartitionDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicSummaryDTO;
 import cl.duoc.pedidos360.kafkaadmin.exception.BrokerUnavailableException;
 import cl.duoc.pedidos360.kafkaadmin.exception.InvalidKafkaRequestException;
+import cl.duoc.pedidos360.kafkaadmin.exception.ProtectedResourceException;
 import cl.duoc.pedidos360.kafkaadmin.exception.ResourceConflictException;
 import cl.duoc.pedidos360.kafkaadmin.exception.ResourceNotFoundException;
 
@@ -75,6 +77,7 @@ import cl.duoc.pedidos360.kafkaadmin.exception.ResourceNotFoundException;
 public class KafkaAdminServiceImpl implements KafkaAdminService {
 
     private final AdminClient adminClient;
+    private final KafkaAdminProperties properties;
 
     @Override
     public ClusterResponseDTO describeCluster() {
@@ -165,6 +168,10 @@ public class KafkaAdminServiceImpl implements KafkaAdminService {
 
     @Override
     public void deleteTopic(String name) {
+        if (properties.isProtected(name)) {
+            throw new ProtectedResourceException(topicSubject(name)
+                    + " es parte del sistema y no se puede eliminar; si se puede modificar su configuracion");
+        }
         await(adminClient.deleteTopics(List.of(name)).all(), topicSubject(name));
     }
 
