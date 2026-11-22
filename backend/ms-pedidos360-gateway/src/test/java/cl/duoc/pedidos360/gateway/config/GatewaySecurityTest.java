@@ -67,6 +67,9 @@ class GatewaySecurityTest {
     static void properties(DynamicPropertyRegistry registry) {
         registry.add("BFF_BASE_URL", () -> BFF.url("/").toString());
         registry.add("MQ_ADMIN_BASE_URL", () -> BFF.url("/").toString());
+        registry.add("KAFKA_ADMIN_BASE_URL", () -> BFF.url("/").toString());
+        registry.add("REPORT_BASE_URL", () -> BFF.url("/").toString());
+        registry.add("AUDIT_BASE_URL", () -> BFF.url("/").toString());
     }
 
     @AfterAll
@@ -133,7 +136,16 @@ class GatewaySecurityTest {
             {"GET", "/api/mq/queues/demo.alerts", "admin"}, {"POST", "/api/mq/queues", "admin"},
             {"DELETE", "/api/mq/queues/demo.alerts", "admin"}, {"POST", "/api/mq/exchanges", "admin"},
             {"DELETE", "/api/mq/exchanges/demo.events", "admin"}, {"POST", "/api/mq/bindings", "admin"},
-            {"DELETE", "/api/mq/bindings?exchange=demo.events&queue=demo.alerts&routingKey=demo.%23", "admin"}
+            {"DELETE", "/api/mq/bindings?exchange=demo.events&queue=demo.alerts&routingKey=demo.%23", "admin"},
+            {"GET", "/api/kafka/cluster", "admin"}, {"GET", "/api/kafka/topics", "admin"},
+            {"GET", "/api/kafka/topics/demo.topic", "admin"}, {"POST", "/api/kafka/topics", "admin"},
+            {"PATCH", "/api/kafka/topics/demo.topic/configs", "admin"},
+            {"POST", "/api/kafka/topics/demo.topic/partitions", "admin"},
+            {"DELETE", "/api/kafka/topics/demo.topic", "admin"}, {"GET", "/api/kafka/consumer-groups", "admin"},
+            {"GET", "/api/kafka/consumer-groups/pedidos360-report", "admin"},
+            {"GET", "/api/reports/summary", "staff"}, {"GET", "/api/reports/top-products?limit=5", "staff"},
+            {"GET", "/api/reports/low-stock", "staff"},
+            {"GET", "/api/audit/entries?aggregateType=ORDER&aggregateId=12&page=0&size=20", "admin"}
         };
         return Stream.of(routes).flatMap(route -> Stream.of("Admin", "Operator", "Customer")
                 .map(role -> Arguments.of(route[0], route[1], role,
@@ -211,6 +223,34 @@ class GatewaySecurityTest {
     void rejectsMqMethodsOutsideTheAdminApi() {
         int requests = BFF.getRequestCount();
         client.put().uri("/api/mq/queues/demo.alerts").header("Authorization", "Bearer " + TOKENS.valid(List.of("Admin")))
+                .exchange().expectStatus().isForbidden();
+        assertThat(BFF.getRequestCount()).isEqualTo(requests);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/api/kafka/topics", "/api/reports/summary", "/api/audit/entries"})
+    void rejectsKafkaReportsAndAuditWithoutToken(String path) {
+        int requests = BFF.getRequestCount();
+        client.get().uri(path).exchange().expectStatus().isUnauthorized()
+                .expectBody().jsonPath("$.status").isEqualTo(401);
+        assertThat(BFF.getRequestCount()).isEqualTo(requests);
+    }
+
+    static Stream<Arguments> methodsOutsideTheApi() {
+        return Stream.of(
+                Arguments.of("PUT", "/api/kafka/topics/demo.topic"),
+                Arguments.of("POST", "/api/reports/summary"),
+                Arguments.of("DELETE", "/api/reports/summary"),
+                Arguments.of("POST", "/api/audit/entries"),
+                Arguments.of("DELETE", "/api/audit/entries"));
+    }
+
+    @ParameterizedTest
+    @MethodSource("methodsOutsideTheApi")
+    void rejectsKafkaReportsAndAuditMethodsOutsideTheirApi(String method, String path) {
+        int requests = BFF.getRequestCount();
+        client.method(HttpMethod.valueOf(method)).uri(path)
+                .header("Authorization", "Bearer " + TOKENS.valid(List.of("Admin")))
                 .exchange().expectStatus().isForbidden();
         assertThat(BFF.getRequestCount()).isEqualTo(requests);
     }

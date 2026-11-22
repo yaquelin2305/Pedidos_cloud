@@ -27,6 +27,18 @@ spring:
               uri: ${MQ_ADMIN_BASE_URL:http://localhost:8083}
               predicates:
                 - Path=/api/mq/**
+            - id: kafka-admin
+              uri: ${KAFKA_ADMIN_BASE_URL:http://localhost:8084}
+              predicates:
+                - Path=/api/kafka/**
+            - id: report
+              uri: ${REPORT_BASE_URL:http://localhost:8085}
+              predicates:
+                - Path=/api/reports/**
+            - id: audit
+              uri: ${AUDIT_BASE_URL:http://localhost:8086}
+              predicates:
+                - Path=/api/audit/**
           httpclient:
             connect-timeout: 5000
             response-timeout: 15s

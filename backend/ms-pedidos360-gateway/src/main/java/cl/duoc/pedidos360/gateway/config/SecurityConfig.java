@@ -57,6 +57,12 @@ public class SecurityConfig {
                         .pathMatchers(HttpMethod.GET, "/api/mq/**").hasRole("Admin")
                         .pathMatchers(HttpMethod.POST, "/api/mq/**").hasRole("Admin")
                         .pathMatchers(HttpMethod.DELETE, "/api/mq/**").hasRole("Admin")
+                        .pathMatchers(HttpMethod.GET, "/api/kafka/**").hasRole("Admin")
+                        .pathMatchers(HttpMethod.POST, "/api/kafka/**").hasRole("Admin")
+                        .pathMatchers(HttpMethod.PATCH, "/api/kafka/**").hasRole("Admin")
+                        .pathMatchers(HttpMethod.DELETE, "/api/kafka/**").hasRole("Admin")
+                        .pathMatchers(HttpMethod.GET, "/api/reports/**").hasAnyRole("Admin", "Operator")
+                        .pathMatchers(HttpMethod.GET, "/api/audit/**").hasRole("Admin")
                         .anyExchange().denyAll())
                 .oauth2ResourceServer(oauth -> oauth
                         .authenticationEntryPoint(entryPoint)
