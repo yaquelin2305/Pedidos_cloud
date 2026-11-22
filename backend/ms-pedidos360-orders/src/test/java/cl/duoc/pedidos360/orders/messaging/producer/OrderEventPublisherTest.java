@@ -46,7 +46,7 @@ class OrderEventPublisherTest {
 
     private OrderEvent event(OrderStatus status) {
         return new OrderEvent(UUID.randomUUID(), 1L, "customer-1", "Maria", OrderStatus.CREADO,
-                status, BigDecimal.TEN, Instant.now());
+                status, BigDecimal.TEN, Instant.now(), "customer-1", "Maria", java.util.List.of());
     }
 
     @ParameterizedTest

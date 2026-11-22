@@ -20,6 +20,7 @@ import cl.duoc.pedidos360.orders.entity.Order;
 import cl.duoc.pedidos360.orders.entity.OrderItem;
 import cl.duoc.pedidos360.orders.entity.OrderStatus;
 import cl.duoc.pedidos360.orders.event.OrderEvent;
+import cl.duoc.pedidos360.orders.event.OrderEventItem;
 import cl.duoc.pedidos360.orders.exception.ForbiddenOrderAccessException;
 import cl.duoc.pedidos360.orders.exception.InvalidOrderStatusTransitionException;
 import cl.duoc.pedidos360.orders.exception.OrderNotFoundException;
@@ -81,7 +82,7 @@ public class OrderServiceImpl implements OrderService {
         order.setTotalAmount(total);
 
         Order saved = orderRepository.save(order);
-        publishOrderEvent(saved, null);
+        publishOrderEvent(saved, null, requester);
         return OrderResponseDTO.from(saved);
     }
 
@@ -127,7 +128,7 @@ public class OrderServiceImpl implements OrderService {
 
         order.setStatus(newStatus);
         Order saved = orderRepository.save(order);
-        publishOrderEvent(saved, previousStatus);
+        publishOrderEvent(saved, previousStatus, requester);
         return OrderResponseDTO.from(saved);
     }
 
@@ -142,13 +143,16 @@ public class OrderServiceImpl implements OrderService {
         }
         order.setStatus(OrderStatus.CANCELADO);
         Order saved = orderRepository.save(order);
-        publishOrderEvent(saved, previousStatus);
+        publishOrderEvent(saved, previousStatus, requester);
         return OrderResponseDTO.from(saved);
     }
 
-    private void publishOrderEvent(Order order, OrderStatus previousStatus) {
+    private void publishOrderEvent(Order order, OrderStatus previousStatus, OrderRequester requester) {
         eventPublisher.publishEvent(new OrderEvent(UUID.randomUUID(), order.getId(), order.getCustomerId(),
-                order.getCustomerName(), previousStatus, order.getStatus(), order.getTotalAmount(), Instant.now()));
+                order.getCustomerName(), previousStatus, order.getStatus(), order.getTotalAmount(), Instant.now(),
+                requester.customerId(), requester.customerName(), order.getItems().stream()
+                        .map(item -> new OrderEventItem(item.getProductId(), item.getProductName(),
+                                item.getQuantity(), item.getUnitPrice(), item.getSubtotal())).toList()));
     }
 
     private Order findWithOwnershipCheck(Long id, OrderRequester requester) {

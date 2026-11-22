@@ -295,5 +295,15 @@ class OrderServiceImplTest {
         assertThat(event.status()).isEqualTo(status);
         assertThat(event.totalAmount()).isEqualByComparingTo("100");
         assertThat(event.occurredAt()).isNotNull();
+        OrderRequester actor = previousStatus == null || status == OrderStatus.CANCELADO ? CUSTOMER : OPERATOR;
+        assertThat(event.actorId()).isEqualTo(actor.customerId());
+        assertThat(event.actorName()).isEqualTo(actor.customerName());
+        assertThat(event.items()).singleElement().satisfies(item -> {
+            assertThat(item.productId()).isEqualTo(10L);
+            assertThat(item.productName()).isEqualTo("Teclado");
+            assertThat(item.quantity()).isEqualTo(2);
+            assertThat(item.unitPrice()).isEqualByComparingTo("50");
+            assertThat(item.subtotal()).isEqualByComparingTo("100");
+        });
     }
 }
