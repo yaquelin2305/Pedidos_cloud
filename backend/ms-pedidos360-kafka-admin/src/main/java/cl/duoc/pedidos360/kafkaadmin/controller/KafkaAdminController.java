@@ -15,10 +15,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 import lombok.RequiredArgsConstructor;
 
 import cl.duoc.pedidos360.kafkaadmin.dto.ClusterResponseDTO;
+import cl.duoc.pedidos360.kafkaadmin.dto.ConsumerGroupDetailResponseDTO;
+import cl.duoc.pedidos360.kafkaadmin.dto.ConsumerGroupSummaryDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.PartitionIncreaseRequestDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicConfigResponseDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicConfigUpdateRequestDTO;
@@ -77,5 +81,17 @@ public class KafkaAdminController {
     public ResponseEntity<Void> deleteTopic(@PathVariable @TopicPath String name) {
         kafkaAdminService.deleteTopic(name);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/consumer-groups")
+    public ResponseEntity<List<ConsumerGroupSummaryDTO>> listConsumerGroups() {
+        return ResponseEntity.ok(kafkaAdminService.listConsumerGroups());
+    }
+
+    @GetMapping("/consumer-groups/{groupId}")
+    public ResponseEntity<ConsumerGroupDetailResponseDTO> getConsumerGroup(
+            @PathVariable @NotBlank(message = "es obligatorio") @Size(max = 255, message = "admite hasta 255 caracteres")
+            String groupId) {
+        return ResponseEntity.ok(kafkaAdminService.describeConsumerGroup(groupId));
     }
 }

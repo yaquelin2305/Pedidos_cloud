@@ -3,6 +3,8 @@ package cl.duoc.pedidos360.kafkaadmin.service;
 import java.util.List;
 
 import cl.duoc.pedidos360.kafkaadmin.dto.ClusterResponseDTO;
+import cl.duoc.pedidos360.kafkaadmin.dto.ConsumerGroupDetailResponseDTO;
+import cl.duoc.pedidos360.kafkaadmin.dto.ConsumerGroupSummaryDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.PartitionIncreaseRequestDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicConfigResponseDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicConfigUpdateRequestDTO;
@@ -31,4 +33,10 @@ public interface KafkaAdminService {
     TopicSummaryDTO increasePartitions(String name, PartitionIncreaseRequestDTO request);
 
     void deleteTopic(String name);
+
+    /** Consumer groups ordenados por nombre, con su estado y numero de miembros. */
+    List<ConsumerGroupSummaryDTO> listConsumerGroups();
+
+    /** Miembros, offsets y lag de un grupo. Lag = ultimo offset del broker menos el confirmado. */
+    ConsumerGroupDetailResponseDTO describeConsumerGroup(String groupId);
 }

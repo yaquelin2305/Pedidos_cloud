@@ -7,20 +7,30 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.admin.ConsumerGroupDescription;
+import org.apache.kafka.clients.admin.ConsumerGroupListing;
 import org.apache.kafka.clients.admin.DescribeClusterResult;
+import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.ListTopicsOptions;
 import org.apache.kafka.clients.admin.NewPartitions;
+import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
@@ -37,13 +47,18 @@ import cl.duoc.pedidos360.kafkaadmin.dto.BrokerDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.ClusterResponseDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.ConfigChangeDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.ConfigOperation;
+import cl.duoc.pedidos360.kafkaadmin.dto.ConsumerGroupDetailResponseDTO;
+import cl.duoc.pedidos360.kafkaadmin.dto.ConsumerGroupSummaryDTO;
+import cl.duoc.pedidos360.kafkaadmin.dto.GroupMemberDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.PartitionIncreaseRequestDTO;
+import cl.duoc.pedidos360.kafkaadmin.dto.PartitionLagDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.PartitionDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicConfigResponseDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicConfigRules;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicConfigUpdateRequestDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicCreateRequestDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicDetailResponseDTO;
+import cl.duoc.pedidos360.kafkaadmin.dto.TopicPartitionDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicSummaryDTO;
 import cl.duoc.pedidos360.kafkaadmin.exception.BrokerUnavailableException;
 import cl.duoc.pedidos360.kafkaadmin.exception.InvalidKafkaRequestException;
@@ -153,6 +168,71 @@ public class KafkaAdminServiceImpl implements KafkaAdminService {
         await(adminClient.deleteTopics(List.of(name)).all(), topicSubject(name));
     }
 
+    @Override
+    public List<ConsumerGroupSummaryDTO> listConsumerGroups() {
+        List<String> groupIds = await(adminClient.listConsumerGroups().all(), null).stream()
+                .map(ConsumerGroupListing::groupId)
+                .sorted()
+                .toList();
+        if (groupIds.isEmpty()) {
+            return List.of();
+        }
+        Map<String, ConsumerGroupDescription> groups = await(adminClient.describeConsumerGroups(groupIds).all(), null);
+        return groupIds.stream()
+                .map(groups::get)
+                .map(group -> new ConsumerGroupSummaryDTO(group.groupId(), group.state().name(), group.members().size()))
+                .toList();
+    }
+
+    @Override
+    public ConsumerGroupDetailResponseDTO describeConsumerGroup(String groupId) {
+        String subject = groupSubject(groupId);
+        ConsumerGroupDescription group = await(adminClient.describeConsumerGroups(List.of(groupId)).all(), subject)
+                .get(groupId);
+        // Para un grupo que no existe Kafka no falla: lo describe como DEAD y sin miembros.
+        if (group == null || group.state() == ConsumerGroupState.DEAD) {
+            throw new ResourceNotFoundException(subject + " no existe");
+        }
+        List<PartitionLagDTO> offsets = readLag(groupId, subject);
+        long totalLag = offsets.stream().mapToLong(PartitionLagDTO::lag).sum();
+        List<GroupMemberDTO> members = group.members().stream()
+                .sorted(Comparator.comparing(MemberDescription::consumerId))
+                .map(this::toMemberDto)
+                .toList();
+        return new ConsumerGroupDetailResponseDTO(groupId, group.state().name(), members, offsets, totalLag);
+    }
+
+    /** Lag por particion: ultimo offset escrito por el broker menos el ultimo confirmado por el grupo. */
+    private List<PartitionLagDTO> readLag(String groupId, String subject) {
+        Map<TopicPartition, OffsetAndMetadata> committed =
+                await(adminClient.listConsumerGroupOffsets(groupId).partitionsToOffsetAndMetadata(), subject);
+        if (committed.isEmpty()) {
+            return List.of();
+        }
+        Map<TopicPartition, OffsetSpec> latest = committed.keySet().stream()
+                .collect(Collectors.toMap(partition -> partition, partition -> OffsetSpec.latest()));
+        Map<TopicPartition, ListOffsetsResultInfo> endOffsets = await(adminClient.listOffsets(latest).all(), subject);
+        return committed.entrySet().stream()
+                .filter(entry -> entry.getValue() != null)
+                .sorted(Comparator.comparing((Map.Entry<TopicPartition, OffsetAndMetadata> entry) -> entry.getKey().topic())
+                        .thenComparingInt(entry -> entry.getKey().partition()))
+                .map(entry -> {
+                    long committedOffset = entry.getValue().offset();
+                    long endOffset = endOffsets.get(entry.getKey()).offset();
+                    return new PartitionLagDTO(entry.getKey().topic(), entry.getKey().partition(), committedOffset,
+                            endOffset, Math.max(0, endOffset - committedOffset));
+                })
+                .toList();
+    }
+
+    private GroupMemberDTO toMemberDto(MemberDescription member) {
+        List<TopicPartitionDTO> assignments = member.assignment().topicPartitions().stream()
+                .sorted(Comparator.comparing(TopicPartition::topic).thenComparingInt(TopicPartition::partition))
+                .map(partition -> new TopicPartitionDTO(partition.topic(), partition.partition()))
+                .toList();
+        return new GroupMemberDTO(member.consumerId(), member.clientId(), member.host(), assignments);
+    }
+
     private TopicDescription describeRaw(String name) {
         return await(adminClient.describeTopics(List.of(name)).allTopicNames(), topicSubject(name)).get(name);
     }
@@ -195,6 +275,10 @@ public class KafkaAdminServiceImpl implements KafkaAdminService {
         return "El topico '" + name + "'";
     }
 
+    private static String groupSubject(String groupId) {
+        return "El consumer group '" + groupId + "'";
+    }
+
     /**
      * Espera el resultado de una llamada al cliente. {@code subject} nombra el recurso consultado
      * para armar el mensaje del 404; es nulo en las consultas que no apuntan a un recurso.
@@ -214,7 +298,7 @@ public class KafkaAdminServiceImpl implements KafkaAdminService {
         if (cause instanceof TopicExistsException) {
             return new ResourceConflictException(subject + " ya existe");
         }
-        if (cause instanceof UnknownTopicOrPartitionException) {
+        if (cause instanceof UnknownTopicOrPartitionException || cause instanceof GroupIdNotFoundException) {
             return new ResourceNotFoundException(subject + " no existe");
         }
         if (cause instanceof InvalidPartitionsException || cause instanceof InvalidReplicationFactorException
