@@ -1,6 +1,6 @@
 # Pedidos360
 
-Sistema de gestión de pedidos con arquitectura cloud native. Monorepo con el frontend y los cinco
+Sistema de gestión de pedidos con arquitectura cloud native. Monorepo con el frontend y los ocho
 servicios de backend.
 
 | Componente | Ruta | Descripción |
@@ -11,6 +11,9 @@ servicios de backend.
 | Orders | `backend/ms-pedidos360-orders/` | Spring Boot, CRUD de pedidos y estados |
 | Catalog | `backend/ms-pedidos360-catalog/` | Spring Boot, CRUD de productos y stock |
 | MQ Admin | `backend/ms-pedidos360-mq-admin/` | Spring Boot, API REST para administrar colas, exchanges y bindings de RabbitMQ |
+| Kafka Admin | `backend/ms-pedidos360-kafka-admin/` | Spring Boot, API REST para administrar tópicos, configuraciones, particiones y consumer groups de Kafka |
+| Report | `backend/ms-pedidos360-report/` | Spring Boot, consume los eventos de Kafka y expone reportes en tiempo real |
+| Audit | `backend/ms-pedidos360-audit/` | Spring Boot, consume los eventos de Kafka y expone la bitácora de auditoría |
 
 ## Stack
 
@@ -26,8 +29,8 @@ exige base de datos por servicio.
 
 ## Docker Compose
 
-El Compose de la raíz construye frontend, gateway, BFF, orders, catalog y mq-admin, y levanta
-PostgreSQL. Con `include` incorpora la infraestructura de mensajería, que vive en archivos propios:
+El Compose de la raíz construye frontend, gateway, BFF, orders, catalog, mq-admin, kafka-admin, report y
+audit, y levanta PostgreSQL. Con `include` incorpora la infraestructura de mensajería, que vive en archivos propios:
 
 | Archivo | Servicios |
 |---|---|
@@ -61,19 +64,23 @@ Navegador --> gateway (localhost:8090) (JWT, scope, roles, CORS)
           --> bff:8080 (segunda validación JWT y roles)
           --> orders:8081 / catalog:8082 --> postgres:5432
           --> mq-admin:8083 (/api/mq/**, solo Admin) --> rabbitmq-1 / rabbitmq-2
+          --> kafka-admin:8084 (/api/kafka/**, solo Admin) --> kafka-1..3
+          --> report:8085 (/api/reports/**, Admin y Operator) --> postgres:5432
+          --> audit:8086 (/api/audit/**, solo Admin) --> postgres:5432
+orders / catalog --> kafka-1..3 --> report / audit   (eventos de pedidos y de stock)
 ```
 
 Se publican los puertos 5173 (SPA), 8090 (gateway), 5432 (PostgreSQL, para
 inspeccionar la base, solo en `127.0.0.1`), 15672 (consola de RabbitMQ, solo en `127.0.0.1`),
 8088 (Kafka UI) y 9092-9094 (brokers Kafka), estos últimos también solo en `127.0.0.1`. BFF, orders,
-catalog y mq-admin solo son accesibles dentro de la red de Compose. El Bearer y los paths llegan
+catalog, mq-admin, kafka-admin, report y audit solo son accesibles dentro de la red de Compose. El Bearer y los paths llegan
 intactos al BFF.
 
 Para desarrollo sin contenedores, levantar cada servicio con Maven, el gateway en 8090
 y Vite en 5173 con `VITE_API_BASE_URL=http://localhost:8090`.
 
-Los límites iniciales son gateway, BFF y mq-admin 320 MiB cada uno y orders/catalog 448 MiB
-cada uno. Cada JVM limita el heap al 60% de su contenedor; el resto también necesita
+Los límites iniciales son gateway, BFF, mq-admin y kafka-admin 320 MiB cada uno, y
+orders, catalog, report y audit 448 MiB cada uno. Cada JVM limita el heap al 60% de su contenedor; el resto también necesita
 memoria nativa.
 
 Las variables `VITE_` se incorporan durante el build: después de cambiarlas hay que
@@ -181,3 +188,8 @@ Repetir el primer comando con `zookeeper-2` y `zookeeper-3`. El segundo lista `k
 Memoria: cada broker usa un heap de 256-512 MiB (`mem_limit` 768 MiB), cada Zookeeper 64-128 MiB
 (256 MiB) y Kafka UI 512 MiB. Con las aplicaciones, RabbitMQ y PostgreSQL, el stack completo necesita
 un equipo de **al menos 16 GB de RAM** (unos 8 GB asignados a Docker), o cerrar otras aplicaciones.
+
+`ms-pedidos360-kafka-admin` permite consultar el clúster, crear, modificar y eliminar tópicos y sus
+configuraciones, aumentar particiones e inspeccionar los consumer groups con su lag, a través del
+gateway (`/api/kafka/**`, rol Admin). No puede eliminar los cuatro tópicos del sistema ni los
+internos de Kafka; ver su README para los endpoints y las validaciones.

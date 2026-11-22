@@ -14,6 +14,9 @@ Valida JWT y permisos antes de reenviar al BFF. No reescribe paths ni sustituye
 | `JWT_REQUIRED_SCOPE` | Scope en `scp`; `access_as_user` |
 | `BFF_BASE_URL` | Destino de orders, catalog y `/me`; `http://localhost:8080` |
 | `MQ_ADMIN_BASE_URL` | Destino de `/api/mq/**`; `http://localhost:8083` |
+| `KAFKA_ADMIN_BASE_URL` | Destino de `/api/kafka/**`; `http://localhost:8084` |
+| `REPORT_BASE_URL` | Destino de `/api/reports/**`; `http://localhost:8085` |
+| `AUDIT_BASE_URL` | Destino de `/api/audit/**`; `http://localhost:8086` |
 | `CORS_ALLOWED_ORIGINS` | Orígenes separados por comas; `http://localhost:5173` |
 
 La firma se verifica contra JWKS del issuer; también se validan issuer, expiración,
@@ -26,7 +29,8 @@ el único origen permitido es `http://localhost:5173`.
 
 ## Rutas y roles
 
-Todas las rutas van al BFF con timeout de conexión de 5 s y respuesta de 15 s.
+Orders, catalog y `/me` van al BFF; `/api/mq`, `/api/kafka`, `/api/reports` y `/api/audit` van directo a
+su servicio. Todas con timeout de conexión de 5 s y respuesta de 15 s.
 
 | Método | Ruta | Roles |
 |---|---|---|
@@ -40,6 +44,9 @@ Todas las rutas van al BFF con timeout de conexión de 5 s y respuesta de 15 s.
 | PUT, DELETE | /api/catalog/products/{id} | Admin |
 | PATCH | /api/catalog/products/{id}/stock | Admin, Operator |
 | GET, POST, DELETE | /api/mq/** (administrador de RabbitMQ) | Admin |
+| GET, POST, PATCH, DELETE | /api/kafka/** (administrador de Kafka) | Admin |
+| GET | /api/reports/** (reportes en tiempo real) | Admin, Operator |
+| GET | /api/audit/** (bitácora de auditoría) | Admin |
 
 Cualquier otra combinación se rechaza. Los permisos coinciden con los controladores
 del BFF; las reglas de negocio y propiedad de pedidos siguen en los servicios.
@@ -55,7 +62,7 @@ mvn clean test
 ```
 
 Las pruebas usan WebTestClient, JWT firmados con RSA generado en memoria y
-MockWebServer como BFF. Importan las rutas reales de producción, sin depender de
+MockWebServer como BFF y como destino de los demás servicios. Importan las rutas reales de producción, sin depender de
 Azure ni de una base de datos. El perfil `test` sustituye solo el decoder y sus
 claves, manteniendo los mismos validadores.
 
