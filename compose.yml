@@ -1,3 +1,11 @@
+# include fusiona los compose de infra en un solo proyecto: los depends_on entre archivos funcionan y
+# project_directory "." resuelve rutas y variables desde la raiz.
+include:
+  - path: infra/rabbitmq/compose.yml
+    project_directory: .
+  - path: infra/kafka/compose.yml
+    project_directory: .
+
 services:
   frontend:
     build:
@@ -85,12 +93,19 @@ services:
       RABBITMQ_ADDRESSES: rabbitmq-1:5672,rabbitmq-2:5672
       RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:?Define RABBITMQ_USERNAME}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Define RABBITMQ_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:29092,kafka-2:29092,kafka-3:29092
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq-1:
         condition: service_healthy
       rabbitmq-2:
+        condition: service_healthy
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
         condition: service_healthy
 
   mq-admin:
@@ -109,42 +124,26 @@ services:
       rabbitmq-2:
         condition: service_healthy
 
-  rabbitmq-1:
-    image: rabbitmq:4.1-management
-    hostname: rabbitmq-1
+  audit:
+    build: ./backend/ms-pedidos360-audit
+    mem_limit: 448m
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:?Define RABBITMQ_USERNAME}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Define RABBITMQ_PASSWORD}
-      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE:?Define RABBITMQ_ERLANG_COOKIE}
-    # Solo la consola de administracion y solo en loopback; AMQP queda interno a la red de Compose.
-    ports:
-      - "127.0.0.1:15672:15672"
-    volumes:
-      - rabbitmq-1-data:/var/lib/rabbitmq
-      - ./infra/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 10s
-      retries: 10
-
-  rabbitmq-2:
-    image: rabbitmq:4.1-management
-    hostname: rabbitmq-2
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:?Define RABBITMQ_USERNAME}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Define RABBITMQ_PASSWORD}
-      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE:?Define RABBITMQ_ERLANG_COOKIE}
-    volumes:
-      - rabbitmq-2-data:/var/lib/rabbitmq
-      - ./infra/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 10s
-      retries: 10
+      SERVER_PORT: 8086
+      JWT_ISSUER_URI: ${JWT_ISSUER_URI:?Define JWT_ISSUER_URI}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:?Define JWT_AUDIENCE}
+      DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-pedidos360}
+      DB_USERNAME: ${DB_USERNAME:-pedidos360}
+      DB_PASSWORD: ${DB_PASSWORD:-pedidos360}
+      JPA_DDL_AUTO: update
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:29092,kafka-2:29092,kafka-3:29092
     depends_on:
-      rabbitmq-1:
+      postgres:
+        condition: service_healthy
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
         condition: service_healthy
 
   postgres:
@@ -165,5 +164,3 @@ services:
 
 volumes:
   postgres-data:
-  rabbitmq-1-data:
-  rabbitmq-2-data:

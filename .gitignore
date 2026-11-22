@@ -4,3 +4,8 @@
 .vscode/
 *.log
 .env
+
+CLAUDE.md
+PARTE*.md
+PROCESO-*.md
+evidencias-ep6/

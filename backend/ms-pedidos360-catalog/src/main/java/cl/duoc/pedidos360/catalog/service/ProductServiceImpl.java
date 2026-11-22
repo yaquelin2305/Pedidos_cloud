@@ -15,6 +15,8 @@ import cl.duoc.pedidos360.catalog.config.CatalogProperties;
 import cl.duoc.pedidos360.catalog.dto.ProductRequestDTO;
 import cl.duoc.pedidos360.catalog.dto.ProductResponseDTO;
 import cl.duoc.pedidos360.catalog.entity.Product;
+import cl.duoc.pedidos360.catalog.event.StockChangeType;
+import cl.duoc.pedidos360.catalog.event.StockChangedEvent;
 import cl.duoc.pedidos360.catalog.event.StockLowEvent;
 import cl.duoc.pedidos360.catalog.exception.InsufficientStockException;
 import cl.duoc.pedidos360.catalog.exception.ProductNotFoundException;
@@ -54,7 +56,9 @@ public class ProductServiceImpl implements ProductService {
                 .stock(request.stock())
                 .category(request.category())
                 .build();
-        return ProductResponseDTO.from(productRepository.save(product));
+        Product saved = productRepository.save(product);
+        publishStockChanged(saved, null, StockChangeType.PRODUCT_CREATED);
+        return ProductResponseDTO.from(saved);
     }
 
     @Override
@@ -72,6 +76,7 @@ public class ProductServiceImpl implements ProductService {
         product.setCategory(request.category());
         Product saved = productRepository.save(product);
         publishIfStockBecameLow(saved, previousStock);
+        publishStockChanged(saved, previousStock, StockChangeType.PRODUCT_UPDATED);
         return ProductResponseDTO.from(saved);
     }
 
@@ -80,7 +85,8 @@ public class ProductServiceImpl implements ProductService {
     public void deactivate(Long id) {
         Product product = findActiveOrThrow(id);
         product.setActive(false);
-        productRepository.save(product);
+        Product saved = productRepository.save(product);
+        publishStockChanged(saved, saved.getStock(), StockChangeType.PRODUCT_DEACTIVATED);
     }
 
     /**
@@ -100,6 +106,7 @@ public class ProductServiceImpl implements ProductService {
         product.setStock(previousStock - quantity);
         Product saved = productRepository.save(product);
         publishIfStockBecameLow(saved, previousStock);
+        publishStockChanged(saved, previousStock, StockChangeType.STOCK_DECREASED);
         return ProductResponseDTO.from(saved);
     }
 
@@ -115,6 +122,7 @@ public class ProductServiceImpl implements ProductService {
         product.setStock(newStock);
         Product saved = productRepository.save(product);
         publishIfStockBecameLow(saved, previousStock);
+        publishStockChanged(saved, previousStock, StockChangeType.STOCK_ADJUSTED);
         return ProductResponseDTO.from(saved);
     }
 
@@ -128,6 +136,16 @@ public class ProductServiceImpl implements ProductService {
             eventPublisher.publishEvent(new StockLowEvent(UUID.randomUUID(), product.getId(), product.getSku(),
                     product.getName(), product.getStock(), threshold, Instant.now()));
         }
+    }
+
+    /**
+     * Emite el snapshot vigente del producto en cada cambio, a diferencia de la alerta de stock bajo,
+     * que solo se emite al cruzar el umbral.
+     */
+    private void publishStockChanged(Product product, Integer previousStock, StockChangeType changeType) {
+        eventPublisher.publishEvent(new StockChangedEvent(UUID.randomUUID(), changeType, product.getId(),
+                product.getSku(), product.getName(), previousStock, product.getStock(),
+                catalogProperties.lowStockThreshold(), product.isActive(), Instant.now()));
     }
 
     private Product findActiveOrThrow(Long id) {
