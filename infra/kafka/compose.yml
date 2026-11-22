@@ -1,4 +1,4 @@
-# Cluster Kafka: 3 Zookeeper (quorum) + 3 brokers. Se incluye desde el compose.yml raiz;
+# Cluster Kafka: 3 Zookeeper (quorum) + 3 brokers + Kafka UI. Se incluye desde el compose.yml raiz;
 # tambien se puede levantar solo:
 #   docker compose --project-directory . --env-file .env -f infra/kafka/compose.yml up -d
 #
@@ -128,6 +128,25 @@ services:
       - "127.0.0.1:9094:9094"
     volumes:
       - kafka-3-data:/var/lib/kafka/data
+
+  kafka-ui:
+    image: ghcr.io/kafbat/kafka-ui:v1.5.0
+    mem_limit: 512m
+    environment:
+      KAFKA_CLUSTERS_0_NAME: pedidos360
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka-1:29092,kafka-2:29092,kafka-3:29092
+      AUTH_TYPE: LOGIN_FORM
+      SPRING_SECURITY_USER_NAME: ${KAFKA_UI_USERNAME:?Define KAFKA_UI_USERNAME}
+      SPRING_SECURITY_USER_PASSWORD: ${KAFKA_UI_PASSWORD:?Define KAFKA_UI_PASSWORD}
+    ports:
+      - "127.0.0.1:8088:8080"
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
+        condition: service_healthy
 
 volumes:
   zookeeper-1-data:
