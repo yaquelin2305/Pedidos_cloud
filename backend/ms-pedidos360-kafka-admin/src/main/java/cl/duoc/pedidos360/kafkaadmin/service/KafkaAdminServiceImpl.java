@@ -18,12 +18,12 @@ import org.apache.kafka.clients.admin.ConsumerGroupListing;
 import org.apache.kafka.clients.admin.DescribeClusterResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.ListTopicsOptions;
-import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.admin.MemberDescription;
+import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
@@ -42,6 +42,7 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.springframework.stereotype.Service;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import cl.duoc.pedidos360.kafkaadmin.config.KafkaAdminProperties;
 import cl.duoc.pedidos360.kafkaadmin.dto.BrokerDTO;
@@ -51,9 +52,9 @@ import cl.duoc.pedidos360.kafkaadmin.dto.ConfigOperation;
 import cl.duoc.pedidos360.kafkaadmin.dto.ConsumerGroupDetailResponseDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.ConsumerGroupSummaryDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.GroupMemberDTO;
+import cl.duoc.pedidos360.kafkaadmin.dto.PartitionDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.PartitionIncreaseRequestDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.PartitionLagDTO;
-import cl.duoc.pedidos360.kafkaadmin.dto.PartitionDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicConfigResponseDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicConfigRules;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicConfigUpdateRequestDTO;
@@ -63,6 +64,7 @@ import cl.duoc.pedidos360.kafkaadmin.dto.TopicPartitionDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicSummaryDTO;
 import cl.duoc.pedidos360.kafkaadmin.exception.BrokerUnavailableException;
 import cl.duoc.pedidos360.kafkaadmin.exception.InvalidKafkaRequestException;
+import cl.duoc.pedidos360.kafkaadmin.exception.KafkaOperationException;
 import cl.duoc.pedidos360.kafkaadmin.exception.ProtectedResourceException;
 import cl.duoc.pedidos360.kafkaadmin.exception.ResourceConflictException;
 import cl.duoc.pedidos360.kafkaadmin.exception.ResourceNotFoundException;
@@ -72,6 +74,7 @@ import cl.duoc.pedidos360.kafkaadmin.exception.ResourceNotFoundException;
  * asincronas: aqui se esperan con {@link #await} y los errores del broker se traducen a las
  * excepciones propias del servicio. Los timeouts salen de {@code spring.kafka.admin.properties}.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class KafkaAdminServiceImpl implements KafkaAdminService {
@@ -132,6 +135,8 @@ public class KafkaAdminServiceImpl implements KafkaAdminService {
         NewTopic topic = new NewTopic(request.name(), request.partitions(), (short) replicationFactor)
                 .configs(request.configs());
         await(adminClient.createTopics(List.of(topic)).all(), topicSubject(request.name()));
+        log.info("Topico '{}' creado: {} particiones, factor de replicacion {}, configs {}", request.name(),
+                request.partitions(), replicationFactor, request.configs());
         return new TopicSummaryDTO(request.name(), request.partitions(), replicationFactor);
     }
 
@@ -150,6 +155,7 @@ public class KafkaAdminServiceImpl implements KafkaAdminService {
         Collection<AlterConfigOp> operations = request.changes().stream().map(this::toAlterConfigOp).toList();
         Map<ConfigResource, Collection<AlterConfigOp>> alterations = Map.of(resource, operations);
         await(adminClient.incrementalAlterConfigs(alterations).all(), topicSubject(name));
+        log.info("Configuracion del topico '{}' modificada: {}", name, request.changes());
         return new TopicConfigResponseDTO(name, readConfigs(name));
     }
 
@@ -163,6 +169,7 @@ public class KafkaAdminServiceImpl implements KafkaAdminService {
                     + "actuales (" + current + "): Kafka no permite reducir las particiones de un topico");
         }
         await(adminClient.createPartitions(Map.of(name, NewPartitions.increaseTo(total))).all(), topicSubject(name));
+        log.info("Topico '{}': particiones aumentadas de {} a {}", name, current, total);
         return new TopicSummaryDTO(name, total, replicationFactorOf(topic));
     }
 
@@ -173,6 +180,7 @@ public class KafkaAdminServiceImpl implements KafkaAdminService {
                     + " es parte del sistema y no se puede eliminar; si se puede modificar su configuracion");
         }
         await(adminClient.deleteTopics(List.of(name)).all(), topicSubject(name));
+        log.info("Topico '{}' eliminado", name);
     }
 
     @Override
@@ -218,7 +226,9 @@ public class KafkaAdminServiceImpl implements KafkaAdminService {
         }
         Map<TopicPartition, OffsetSpec> latest = committed.keySet().stream()
                 .collect(Collectors.toMap(partition -> partition, partition -> OffsetSpec.latest()));
-        Map<TopicPartition, ListOffsetsResultInfo> endOffsets = await(adminClient.listOffsets(latest).all(), subject);
+        // Un topico con offsets confirmados puede haberse eliminado: el 404 debe nombrar al topico, no al grupo.
+        Map<TopicPartition, ListOffsetsResultInfo> endOffsets = await(adminClient.listOffsets(latest).all(),
+                "Un topico del consumer group '" + groupId + "'");
         return committed.entrySet().stream()
                 .filter(entry -> entry.getValue() != null)
                 .sorted(Comparator.comparing((Map.Entry<TopicPartition, OffsetAndMetadata> entry) -> entry.getKey().topic())
@@ -288,7 +298,8 @@ public class KafkaAdminServiceImpl implements KafkaAdminService {
 
     /**
      * Espera el resultado de una llamada al cliente. {@code subject} nombra el recurso consultado
-     * para armar el mensaje del 404; es nulo en las consultas que no apuntan a un recurso.
+     * para armar el mensaje del 404 o del 409; si es nulo (consultas que no apuntan a un recurso
+     * concreto) se usa un texto generico.
      */
     private <T> T await(KafkaFuture<T> future, String subject) {
         try {
@@ -297,7 +308,7 @@ public class KafkaAdminServiceImpl implements KafkaAdminService {
             Thread.currentThread().interrupt();
             throw new BrokerUnavailableException("Se interrumpio la consulta a Kafka", ex);
         } catch (ExecutionException ex) {
-            throw translate(ex.getCause(), subject);
+            throw translate(ex.getCause(), subject == null ? "El recurso solicitado" : subject);
         }
     }
 
@@ -316,6 +327,6 @@ public class KafkaAdminServiceImpl implements KafkaAdminService {
         if (cause instanceof RetriableException) {
             return new BrokerUnavailableException("Kafka no esta disponible o no respondio a tiempo", cause);
         }
-        return new IllegalStateException("Error inesperado de Kafka: " + cause.getMessage(), cause);
+        return new KafkaOperationException("Error inesperado de Kafka: " + cause.getMessage(), cause);
     }
 }
