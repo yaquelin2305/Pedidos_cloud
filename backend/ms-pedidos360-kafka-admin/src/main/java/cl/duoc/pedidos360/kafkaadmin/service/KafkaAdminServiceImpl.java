@@ -1,5 +1,6 @@
 package cl.duoc.pedidos360.kafkaadmin.service;
 
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -8,10 +9,12 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.DescribeClusterResult;
 import org.apache.kafka.clients.admin.ListTopicsOptions;
+import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.KafkaFuture;
@@ -32,8 +35,13 @@ import lombok.RequiredArgsConstructor;
 
 import cl.duoc.pedidos360.kafkaadmin.dto.BrokerDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.ClusterResponseDTO;
+import cl.duoc.pedidos360.kafkaadmin.dto.ConfigChangeDTO;
+import cl.duoc.pedidos360.kafkaadmin.dto.ConfigOperation;
+import cl.duoc.pedidos360.kafkaadmin.dto.PartitionIncreaseRequestDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.PartitionDTO;
+import cl.duoc.pedidos360.kafkaadmin.dto.TopicConfigResponseDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicConfigRules;
+import cl.duoc.pedidos360.kafkaadmin.dto.TopicConfigUpdateRequestDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicCreateRequestDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicDetailResponseDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicSummaryDTO;
@@ -81,8 +89,7 @@ public class KafkaAdminServiceImpl implements KafkaAdminService {
 
     @Override
     public TopicDetailResponseDTO describeTopic(String name) {
-        String subject = topicSubject(name);
-        TopicDescription topic = await(adminClient.describeTopics(List.of(name)).allTopicNames(), subject).get(name);
+        TopicDescription topic = describeRaw(name);
         List<PartitionDTO> partitions = topic.partitions().stream()
                 .sorted(Comparator.comparingInt(TopicPartitionInfo::partition))
                 .map(this::toPartitionDto)
@@ -111,8 +118,50 @@ public class KafkaAdminServiceImpl implements KafkaAdminService {
     }
 
     @Override
+    public TopicConfigResponseDTO updateTopicConfigs(String name, TopicConfigUpdateRequestDTO request) {
+        int replicationFactor = replicationFactorOf(describeRaw(name));
+        for (ConfigChangeDTO change : request.changes()) {
+            if (change.operation() == ConfigOperation.SET
+                    && TopicConfigRules.MIN_INSYNC_REPLICAS.equals(change.key())
+                    && Long.parseLong(change.value()) > replicationFactor) {
+                throw new InvalidKafkaRequestException(TopicConfigRules.MIN_INSYNC_REPLICAS + " (" + change.value()
+                        + ") no puede superar el replicationFactor del topico (" + replicationFactor + ")");
+            }
+        }
+        ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, name);
+        Collection<AlterConfigOp> operations = request.changes().stream().map(this::toAlterConfigOp).toList();
+        Map<ConfigResource, Collection<AlterConfigOp>> alterations = Map.of(resource, operations);
+        await(adminClient.incrementalAlterConfigs(alterations).all(), topicSubject(name));
+        return new TopicConfigResponseDTO(name, readConfigs(name));
+    }
+
+    @Override
+    public TopicSummaryDTO increasePartitions(String name, PartitionIncreaseRequestDTO request) {
+        TopicDescription topic = describeRaw(name);
+        int current = topic.partitions().size();
+        int total = request.totalCount();
+        if (total <= current) {
+            throw new InvalidKafkaRequestException("totalCount (" + total + ") debe ser mayor que las particiones "
+                    + "actuales (" + current + "): Kafka no permite reducir las particiones de un topico");
+        }
+        await(adminClient.createPartitions(Map.of(name, NewPartitions.increaseTo(total))).all(), topicSubject(name));
+        return new TopicSummaryDTO(name, total, replicationFactorOf(topic));
+    }
+
+    @Override
     public void deleteTopic(String name) {
         await(adminClient.deleteTopics(List.of(name)).all(), topicSubject(name));
+    }
+
+    private TopicDescription describeRaw(String name) {
+        return await(adminClient.describeTopics(List.of(name)).allTopicNames(), topicSubject(name)).get(name);
+    }
+
+    private AlterConfigOp toAlterConfigOp(ConfigChangeDTO change) {
+        return switch (change.operation()) {
+            case SET -> new AlterConfigOp(new ConfigEntry(change.key(), change.value()), AlterConfigOp.OpType.SET);
+            case DELETE -> new AlterConfigOp(new ConfigEntry(change.key(), null), AlterConfigOp.OpType.DELETE);
+        };
     }
 
     private Map<String, String> readConfigs(String topicName) {

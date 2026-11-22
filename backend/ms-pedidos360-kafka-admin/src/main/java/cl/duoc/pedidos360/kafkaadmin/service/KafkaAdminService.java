@@ -3,6 +3,9 @@ package cl.duoc.pedidos360.kafkaadmin.service;
 import java.util.List;
 
 import cl.duoc.pedidos360.kafkaadmin.dto.ClusterResponseDTO;
+import cl.duoc.pedidos360.kafkaadmin.dto.PartitionIncreaseRequestDTO;
+import cl.duoc.pedidos360.kafkaadmin.dto.TopicConfigResponseDTO;
+import cl.duoc.pedidos360.kafkaadmin.dto.TopicConfigUpdateRequestDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicCreateRequestDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicDetailResponseDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicSummaryDTO;
@@ -21,6 +24,11 @@ public interface KafkaAdminService {
     TopicDetailResponseDTO describeTopic(String name);
 
     TopicSummaryDTO createTopic(TopicCreateRequestDTO request);
+
+    /** Aplica los cambios con una sola llamada y devuelve las configuraciones resultantes. */
+    TopicConfigResponseDTO updateTopicConfigs(String name, TopicConfigUpdateRequestDTO request);
+
+    TopicSummaryDTO increasePartitions(String name, PartitionIncreaseRequestDTO request);
 
     void deleteTopic(String name);
 }

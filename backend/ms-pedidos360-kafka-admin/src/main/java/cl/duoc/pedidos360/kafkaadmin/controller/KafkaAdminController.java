@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -18,6 +19,9 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 import cl.duoc.pedidos360.kafkaadmin.dto.ClusterResponseDTO;
+import cl.duoc.pedidos360.kafkaadmin.dto.PartitionIncreaseRequestDTO;
+import cl.duoc.pedidos360.kafkaadmin.dto.TopicConfigResponseDTO;
+import cl.duoc.pedidos360.kafkaadmin.dto.TopicConfigUpdateRequestDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicCreateRequestDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicDetailResponseDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicPath;
@@ -55,6 +59,18 @@ public class KafkaAdminController {
     @PostMapping("/topics")
     public ResponseEntity<TopicSummaryDTO> createTopic(@Valid @RequestBody TopicCreateRequestDTO request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(kafkaAdminService.createTopic(request));
+    }
+
+    @PatchMapping("/topics/{name}/configs")
+    public ResponseEntity<TopicConfigResponseDTO> updateTopicConfigs(@PathVariable @TopicPath String name,
+            @Valid @RequestBody TopicConfigUpdateRequestDTO request) {
+        return ResponseEntity.ok(kafkaAdminService.updateTopicConfigs(name, request));
+    }
+
+    @PostMapping("/topics/{name}/partitions")
+    public ResponseEntity<TopicSummaryDTO> increasePartitions(@PathVariable @TopicPath String name,
+            @Valid @RequestBody PartitionIncreaseRequestDTO request) {
+        return ResponseEntity.ok(kafkaAdminService.increasePartitions(name, request));
     }
 
     @DeleteMapping("/topics/{name}")
