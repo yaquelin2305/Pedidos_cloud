@@ -27,8 +27,17 @@ exige base de datos por servicio.
 ## Docker Compose
 
 El Compose de la raíz construye frontend, gateway, BFF, orders, catalog y mq-admin, y levanta
-PostgreSQL y un clúster RabbitMQ de dos nodos. Todo corre en localhost; Azure Entra es el único
-servicio externo.
+PostgreSQL. Con `include` incorpora la infraestructura de mensajería, que vive en archivos propios:
+
+| Archivo | Servicios |
+|---|---|
+| `compose.yml` | aplicaciones + PostgreSQL |
+| `infra/rabbitmq/compose.yml` | `rabbitmq-1`, `rabbitmq-2` |
+| `infra/kafka/compose.yml` | `zookeeper-1..3`, `kafka-1..3`, `kafka-ui` |
+
+`include` fusiona los tres en un solo proyecto, así que el mismo comando levanta todo y los
+`depends_on` entre archivos funcionan. Todo corre en localhost; Azure Entra es el único servicio
+externo.
 
 Requiere Docker con Compose, las variables de Azure en `frontend/.env` y las del backend
 en `.env` de la raíz, siguiendo `.env.example`. Ambos archivos son locales. Compose
@@ -55,8 +64,10 @@ Navegador --> gateway (localhost:8090) (JWT, scope, roles, CORS)
 ```
 
 Se publican los puertos 5173 (SPA), 8090 (gateway), 5432 (PostgreSQL, para
-inspeccionar la base, solo en `127.0.0.1`) y 15672 (consola de RabbitMQ, solo en `127.0.0.1`). BFF, orders, catalog y mq-admin solo son accesibles dentro de la
-red de Compose. El Bearer y los paths llegan intactos al BFF.
+inspeccionar la base, solo en `127.0.0.1`), 15672 (consola de RabbitMQ, solo en `127.0.0.1`),
+8088 (Kafka UI) y 9092-9094 (brokers Kafka), estos últimos también solo en `127.0.0.1`. BFF, orders,
+catalog y mq-admin solo son accesibles dentro de la red de Compose. El Bearer y los paths llegan
+intactos al BFF.
 
 Para desarrollo sin contenedores, levantar cada servicio con Maven, el gateway en 8090
 y Vite en 5173 con `VITE_API_BASE_URL=http://localhost:8090`.
@@ -88,6 +99,12 @@ docker compose --env-file frontend/.env --env-file .env exec rabbitmq-1 rabbitmq
 `cluster_status` debe listar los dos nodos en *Running Nodes*. La consola está en
 `http://localhost:15672` con las credenciales de `.env`.
 
+El clúster también se puede levantar solo, desde la raíz:
+
+```sh
+docker compose --project-directory . --env-file .env -f infra/rabbitmq/compose.yml up -d
+```
+
 Las colas son quorum: en la consola, *Queues and Streams* → una cola → *Members* muestra ambos nodos.
 También desde la terminal:
 
@@ -106,3 +123,61 @@ docker volume rm pedidos_cloud_rabbitmq-1-data pedidos_cloud_rabbitmq-2-data
 La topología, el flujo de mensajes y la política de errores de cada servicio están en su README.
 `ms-pedidos360-mq-admin` permite crear, consultar y eliminar colas, exchanges y bindings a través
 del gateway (`/api/mq/**`, rol Admin), sin poder eliminar la topología de orders y catalog.
+
+## Kafka
+
+Clúster en modo Zookeeper definido en `infra/kafka/compose.yml`, con imágenes Confluent Platform
+`7.9.11` (Kafka 3.9, la última serie que incluye Zookeeper) y Kafka UI `ghcr.io/kafbat/kafka-ui:v1.5.0`.
+
+| Componente | Rol |
+|---|---|
+| `zookeeper-1..3` | Ensemble de 3 nodos. Guarda los metadatos del clúster y elige al broker controlador. Funciona mientras haya mayoría (2 de 3): tolera la caída de un nodo |
+| `kafka-1..3` | Brokers con IDs 1, 2 y 3. Con replicación 3 y `min.insync.replicas=2`, cada mensaje confirmado queda en al menos 2 brokers y el clúster sigue aceptando escrituras con un broker caído |
+| `kafka-ui` | Consola web para administrar brokers, tópicos, particiones, mensajes y consumer groups (offsets y lag) |
+
+Configuración de los brokers que vale para todo el clúster: `default.replication.factor=3`,
+`min.insync.replicas=2`, `num.partitions=3`, `unclean.leader.election.enable=false` (nunca se elige
+líder a una réplica desactualizada) y `auto.create.topics.enable=false`: un tópico solo existe si lo
+declara su servicio dueño o lo crea el administrador. Los tópicos internos de offsets y transacciones
+también usan replicación 3.
+
+Cada broker tiene dos listeners: `INTERNAL` (`kafka-N:29092`), que usan los contenedores de Compose, y
+`EXTERNAL` (`localhost:9092/9093/9094`), para correr servicios con Maven desde el host.
+
+| Servicio | Puerto en el host | Uso |
+|---|---|---|
+| `kafka-1` | `127.0.0.1:9092` | bootstrap externo |
+| `kafka-2` | `127.0.0.1:9093` | bootstrap externo |
+| `kafka-3` | `127.0.0.1:9094` | bootstrap externo |
+| `kafka-ui` | `127.0.0.1:8088` | consola web |
+| `zookeeper-1..3` | no se publican | 2181 cliente, 2888/3888 quórum |
+
+Variables en `.env` (ver `.env.example`): `KAFKA_UI_USERNAME` y `KAFKA_UI_PASSWORD`, obligatorias,
+son las credenciales del formulario de Kafka UI. Los servicios reciben `KAFKA_BOOTSTRAP_SERVERS`
+desde Compose (`kafka-1:29092,kafka-2:29092,kafka-3:29092`); con Maven, el valor por defecto es
+`localhost:9092,localhost:9093,localhost:9094`.
+
+Levantar todo con el comando de siempre, o solo Kafka:
+
+```sh
+docker compose --env-file frontend/.env --env-file .env up --build -d
+docker compose --project-directory . --env-file .env -f infra/kafka/compose.yml up -d
+```
+
+Kafka UI queda en `http://127.0.0.1:8088`. Los brokers y los Zookeeper tienen healthcheck: un
+Zookeeper está *healthy* solo cuando ya forma parte del quórum, y un broker cuando responde a
+peticiones. Kafka UI y los servicios que usan Kafka esperan a que los tres brokers estén *healthy*.
+
+Verificar el quórum de Zookeeper (uno debe ser `leader` y dos `follower`) y los 3 brokers:
+
+```sh
+docker compose --env-file frontend/.env --env-file .env exec zookeeper-1 sh -c "echo srvr | nc localhost 2181 | grep Mode"
+docker compose --env-file frontend/.env --env-file .env exec kafka-1 kafka-broker-api-versions --bootstrap-server localhost:29092
+```
+
+Repetir el primer comando con `zookeeper-2` y `zookeeper-3`. El segundo lista `kafka-1`, `kafka-2` y
+`kafka-3` con sus IDs. En Kafka UI, *Brokers* muestra los tres.
+
+Memoria: cada broker usa un heap de 256-512 MiB (`mem_limit` 768 MiB), cada Zookeeper 64-128 MiB
+(256 MiB) y Kafka UI 512 MiB. Con las aplicaciones, RabbitMQ y PostgreSQL, el stack completo necesita
+un equipo de **al menos 16 GB de RAM** (unos 8 GB asignados a Docker), o cerrar otras aplicaciones.
