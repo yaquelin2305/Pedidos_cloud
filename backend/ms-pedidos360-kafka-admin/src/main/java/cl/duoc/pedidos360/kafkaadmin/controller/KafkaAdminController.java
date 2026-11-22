@@ -2,16 +2,23 @@ package cl.duoc.pedidos360.kafkaadmin.controller;
 
 import java.util.List;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import jakarta.validation.Valid;
 
 import lombok.RequiredArgsConstructor;
 
 import cl.duoc.pedidos360.kafkaadmin.dto.ClusterResponseDTO;
+import cl.duoc.pedidos360.kafkaadmin.dto.TopicCreateRequestDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicDetailResponseDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicPath;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicSummaryDTO;
@@ -43,5 +50,16 @@ public class KafkaAdminController {
     @GetMapping("/topics/{name}")
     public ResponseEntity<TopicDetailResponseDTO> getTopic(@PathVariable @TopicPath String name) {
         return ResponseEntity.ok(kafkaAdminService.describeTopic(name));
+    }
+
+    @PostMapping("/topics")
+    public ResponseEntity<TopicSummaryDTO> createTopic(@Valid @RequestBody TopicCreateRequestDTO request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(kafkaAdminService.createTopic(request));
+    }
+
+    @DeleteMapping("/topics/{name}")
+    public ResponseEntity<Void> deleteTopic(@PathVariable @TopicPath String name) {
+        kafkaAdminService.deleteTopic(name);
+        return ResponseEntity.noContent().build();
     }
 }

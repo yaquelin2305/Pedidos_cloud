@@ -12,12 +12,19 @@ import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.DescribeClusterResult;
 import org.apache.kafka.clients.admin.ListTopicsOptions;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.InvalidPartitionsException;
+import org.apache.kafka.common.errors.InvalidReplicationFactorException;
+import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.springframework.stereotype.Service;
 
@@ -27,9 +34,12 @@ import cl.duoc.pedidos360.kafkaadmin.dto.BrokerDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.ClusterResponseDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.PartitionDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicConfigRules;
+import cl.duoc.pedidos360.kafkaadmin.dto.TopicCreateRequestDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicDetailResponseDTO;
 import cl.duoc.pedidos360.kafkaadmin.dto.TopicSummaryDTO;
 import cl.duoc.pedidos360.kafkaadmin.exception.BrokerUnavailableException;
+import cl.duoc.pedidos360.kafkaadmin.exception.InvalidKafkaRequestException;
+import cl.duoc.pedidos360.kafkaadmin.exception.ResourceConflictException;
 import cl.duoc.pedidos360.kafkaadmin.exception.ResourceNotFoundException;
 
 /**
@@ -81,6 +91,30 @@ public class KafkaAdminServiceImpl implements KafkaAdminService {
                 readConfigs(name));
     }
 
+    @Override
+    public TopicSummaryDTO createTopic(TopicCreateRequestDTO request) {
+        int brokers = await(adminClient.describeCluster().nodes(), null).size();
+        int replicationFactor = request.replicationFactor();
+        if (replicationFactor > brokers) {
+            throw new InvalidKafkaRequestException("replicationFactor (" + replicationFactor
+                    + ") no puede superar los brokers disponibles (" + brokers + ")");
+        }
+        String minInsync = request.configs().get(TopicConfigRules.MIN_INSYNC_REPLICAS);
+        if (minInsync != null && Long.parseLong(minInsync) > replicationFactor) {
+            throw new InvalidKafkaRequestException(TopicConfigRules.MIN_INSYNC_REPLICAS + " (" + minInsync
+                    + ") no puede superar el replicationFactor del topico (" + replicationFactor + ")");
+        }
+        NewTopic topic = new NewTopic(request.name(), request.partitions(), (short) replicationFactor)
+                .configs(request.configs());
+        await(adminClient.createTopics(List.of(topic)).all(), topicSubject(request.name()));
+        return new TopicSummaryDTO(request.name(), request.partitions(), replicationFactor);
+    }
+
+    @Override
+    public void deleteTopic(String name) {
+        await(adminClient.deleteTopics(List.of(name)).all(), topicSubject(name));
+    }
+
     private Map<String, String> readConfigs(String topicName) {
         ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topicName);
         Config config = await(adminClient.describeConfigs(List.of(resource)).all(), topicSubject(topicName))
@@ -128,8 +162,16 @@ public class KafkaAdminServiceImpl implements KafkaAdminService {
     }
 
     private RuntimeException translate(Throwable cause, String subject) {
+        if (cause instanceof TopicExistsException) {
+            return new ResourceConflictException(subject + " ya existe");
+        }
         if (cause instanceof UnknownTopicOrPartitionException) {
             return new ResourceNotFoundException(subject + " no existe");
+        }
+        if (cause instanceof InvalidPartitionsException || cause instanceof InvalidReplicationFactorException
+                || cause instanceof InvalidConfigurationException || cause instanceof PolicyViolationException
+                || cause instanceof InvalidRequestException) {
+            return new InvalidKafkaRequestException(cause.getMessage());
         }
         if (cause instanceof RetriableException) {
             return new BrokerUnavailableException("Kafka no esta disponible o no respondio a tiempo", cause);
