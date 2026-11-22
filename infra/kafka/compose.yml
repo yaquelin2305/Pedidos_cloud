@@ -1,0 +1,141 @@
+# Cluster Kafka: 3 Zookeeper (quorum) + 3 brokers. Se incluye desde el compose.yml raiz;
+# tambien se puede levantar solo:
+#   docker compose --project-directory . --env-file .env -f infra/kafka/compose.yml up -d
+#
+# Con 3 Zookeeper el quorum (mayoria 2 de 3) sobrevive a la caida de un nodo. Con 3 brokers, RF 3 y
+# min.insync.replicas=2 el cluster sigue aceptando escrituras con un broker caido.
+
+x-zookeeper: &zookeeper
+  image: confluentinc/cp-zookeeper:7.9.11
+  mem_limit: 256m
+  healthcheck:
+    # Healthy solo cuando el nodo ya es parte del quorum (leader o follower).
+    test: ["CMD-SHELL", "echo srvr | nc -w 2 localhost 2181 | grep -qE 'Mode: (leader|follower)'"]
+    interval: 10s
+    timeout: 5s
+    retries: 12
+
+x-zookeeper-env: &zookeeper-env
+  ZOOKEEPER_CLIENT_PORT: 2181
+  ZOOKEEPER_TICK_TIME: 2000
+  ZOOKEEPER_INIT_LIMIT: 5
+  ZOOKEEPER_SYNC_LIMIT: 2
+  ZOOKEEPER_SERVERS: zookeeper-1:2888:3888;zookeeper-2:2888:3888;zookeeper-3:2888:3888
+  ZOOKEEPER_4LW_COMMANDS_WHITELIST: srvr,ruok,mntr
+  KAFKA_HEAP_OPTS: -Xms64m -Xmx128m
+
+x-kafka: &kafka
+  image: confluentinc/cp-kafka:7.9.11
+  mem_limit: 768m
+  healthcheck:
+    # La herramienta corre con heap propio para no competir con el broker dentro del mem_limit.
+    test: ["CMD-SHELL", "KAFKA_HEAP_OPTS=-Xmx64m kafka-broker-api-versions --bootstrap-server localhost:29092 > /dev/null"]
+    interval: 15s
+    timeout: 20s
+    retries: 12
+    start_period: 30s
+  depends_on:
+    zookeeper-1:
+      condition: service_healthy
+    zookeeper-2:
+      condition: service_healthy
+    zookeeper-3:
+      condition: service_healthy
+
+x-kafka-env: &kafka-env
+  KAFKA_ZOOKEEPER_CONNECT: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+  KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+  KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+  KAFKA_MIN_INSYNC_REPLICAS: 2
+  KAFKA_NUM_PARTITIONS: 3
+  # Un topico solo existe si lo declara su servicio dueno o lo crea kafka-admin.
+  KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+  # Nunca se elige lider a una replica desactualizada: se prefiere no aceptar datos a perderlos.
+  KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE: "false"
+  KAFKA_HEAP_OPTS: -Xms256m -Xmx512m
+
+services:
+  zookeeper-1:
+    <<: *zookeeper
+    hostname: zookeeper-1
+    environment:
+      <<: *zookeeper-env
+      ZOOKEEPER_SERVER_ID: 1
+    volumes:
+      - zookeeper-1-data:/var/lib/zookeeper/data
+      - zookeeper-1-log:/var/lib/zookeeper/log
+
+  zookeeper-2:
+    <<: *zookeeper
+    hostname: zookeeper-2
+    environment:
+      <<: *zookeeper-env
+      ZOOKEEPER_SERVER_ID: 2
+    volumes:
+      - zookeeper-2-data:/var/lib/zookeeper/data
+      - zookeeper-2-log:/var/lib/zookeeper/log
+
+  zookeeper-3:
+    <<: *zookeeper
+    hostname: zookeeper-3
+    environment:
+      <<: *zookeeper-env
+      ZOOKEEPER_SERVER_ID: 3
+    volumes:
+      - zookeeper-3-data:/var/lib/zookeeper/data
+      - zookeeper-3-log:/var/lib/zookeeper/log
+
+  # INTERNAL (29092) lo usan los contenedores de Compose; EXTERNAL (909X) los servicios corridos con Maven.
+  kafka-1:
+    <<: *kafka
+    hostname: kafka-1
+    environment:
+      <<: *kafka-env
+      KAFKA_BROKER_ID: 1
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-1:29092,EXTERNAL://localhost:9092
+    ports:
+      - "127.0.0.1:9092:9092"
+    volumes:
+      - kafka-1-data:/var/lib/kafka/data
+
+  kafka-2:
+    <<: *kafka
+    hostname: kafka-2
+    environment:
+      <<: *kafka-env
+      KAFKA_BROKER_ID: 2
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-2:29092,EXTERNAL://localhost:9093
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - kafka-2-data:/var/lib/kafka/data
+
+  kafka-3:
+    <<: *kafka
+    hostname: kafka-3
+    environment:
+      <<: *kafka-env
+      KAFKA_BROKER_ID: 3
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-3:29092,EXTERNAL://localhost:9094
+    ports:
+      - "127.0.0.1:9094:9094"
+    volumes:
+      - kafka-3-data:/var/lib/kafka/data
+
+volumes:
+  zookeeper-1-data:
+  zookeeper-1-log:
+  zookeeper-2-data:
+  zookeeper-2-log:
+  zookeeper-3-data:
+  zookeeper-3-log:
+  kafka-1-data:
+  kafka-2-data:
+  kafka-3-data:
