@@ -11,7 +11,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 public record OrderLineMessage(
         @NotNull Long productId,
         String productName,
-        @PositiveOrZero Integer quantity,
-        @PositiveOrZero BigDecimal unitPrice,
-        @PositiveOrZero BigDecimal subtotal) {
+        @NotNull @PositiveOrZero Integer quantity,
+        @NotNull @PositiveOrZero BigDecimal unitPrice,
+        @NotNull @PositiveOrZero BigDecimal subtotal) {
 }

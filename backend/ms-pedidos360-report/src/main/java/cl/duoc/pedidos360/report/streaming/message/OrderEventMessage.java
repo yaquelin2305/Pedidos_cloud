@@ -8,6 +8,7 @@ import java.util.UUID;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Pattern;
 
 /**
  * Mensaje del topico {@code pedidos360.orders.events} (key = {@code orderId}). Copia propia del
@@ -17,7 +18,7 @@ import jakarta.validation.constraints.PositiveOrZero;
  */
 public record OrderEventMessage(
         @NotNull UUID eventId,
-        @NotNull String eventType,
+        @NotNull @Pattern(regexp = "ORDER_CREATED|ORDER_STATUS_CHANGED|ORDER_CANCELLED") String eventType,
         Integer schemaVersion,
         String source,
         @NotNull Instant occurredAt,
@@ -27,7 +28,7 @@ public record OrderEventMessage(
         String actorId,
         String actorName,
         String previousStatus,
-        @NotNull String status,
-        @PositiveOrZero BigDecimal totalAmount,
-        List<@Valid OrderLineMessage> items) {
+        @NotNull @Pattern(regexp = "CREADO|ACEPTADO|EN_PREPARACION|DESPACHADO|ENTREGADO|CANCELADO") String status,
+        @NotNull @PositiveOrZero BigDecimal totalAmount,
+        @NotNull List<@NotNull @Valid OrderLineMessage> items) {
 }

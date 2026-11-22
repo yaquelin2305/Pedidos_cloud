@@ -14,6 +14,47 @@ spring:
         jwt:
           issuer-uri: ${JWT_ISSUER_URI}
           audiences: ${JWT_AUDIENCE}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092,localhost:9093,localhost:9094}
+    consumer:
+      # Un grupo por responsabilidad: report recibe todos los eventos sin competir con audit.
+      group-id: pedidos360-report
+      # Un grupo nuevo reconstruye las proyecciones desde lo que los topicos retienen.
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      max-poll-records: 50
+      # Un mensaje ilegible no bota el consumidor: el error llega al error handler y va a la DLT.
+      key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        # Tipo fijo por topico (spring.json.value.default.type lo pone cada factory).
+        spring.json.use.type.headers: false
+        spring.json.trusted.packages: cl.duoc.pedidos360.report.streaming.message
+    # Productor usado solo para reenviar mensajes fallidos a las DLT.
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
+        delivery.timeout.ms: 30000
+        request.timeout.ms: 15000
+        max.block.ms: 5000
+    listener:
+      # Commit por mensaje procesado o enviado a la DLT.
+      ack-mode: record
 
 server:
   port: ${SERVER_PORT:8085}
+
+pedidos360:
+  streaming:
+    topics:
+      order-events: pedidos360.orders.events
+      stock: pedidos360.catalog.stock
+    dead-letter-suffix: .DLT
+    # Tres consumidores por factory reparten las tres particiones de cada topico.
+    concurrency: 3
+    retry:
+      interval-ms: 1000
+      max-retries: 3
