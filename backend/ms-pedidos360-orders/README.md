@@ -204,3 +204,44 @@ y comprobar sus logs, además del descuento de stock en catalog.
 
 No existe compensación automática si el descuento de stock falla a mitad de un pedido con varias
 líneas (ver comentario en `OrderServiceImpl.changeStatus`).
+
+
+## Kafka: eventos de pedidos
+
+El evento de dominio incluye `actorId`, `actorName` e `items` (producto, cantidad, precio y subtotal).
+El actor es quien ejecuta la accion y puede diferir del cliente del pedido. El mapper deriva
+`ORDER_CREATED`, `ORDER_STATUS_CHANGED` u `ORDER_CANCELLED`; agrega `schemaVersion=1`,
+`source=ms-pedidos360-orders` y conserva `eventId`, `occurredAt`, cliente, estados y monto.
+La key es `orderId` como texto: conserva el orden de los cambios de un pedido en una misma particion.
+
+`OrderEventKafkaPublisher` escucha despues del commit, independientemente del publicador RabbitMQ.
+Una transaccion revertida no publica. El envio es asincrono, registra topico, particion, offset, key e
+identidad y captura fallos sin propagarlos al HTTP ni impedir otros listeners. El stock sigue descontandose
+por REST al aceptar. No hay outbox: un fallo permanente de publicacion queda registrado, pero no garantiza
+recuperacion automatica del evento confirmado en la BD.
+
+Orders declara con `KafkaTopicConfig` los valores de `pedidos360.streaming.topics`:
+
+| Topico | Particiones | Replicas | ISR minimo | Limpieza | Retencion |
+|---|---|---|---|---|---|
+| `pedidos360.orders.events` | 3 | 3 | 2 | delete | 7 dias |
+| `pedidos360.orders.events.DLT` | 3 | 3 | 2 | delete | 14 dias |
+
+Tres particiones permiten tres consumidores concurrentes. RF 3, ISR minimo 2 y `acks=all` permiten
+escribir con un broker caido; con dos caidos se rechaza el envio. Los siete dias permiten reprocesar hechos
+sin crecimiento indefinido. La DLT necesita las mismas particiones que el origen y da catorce dias para
+investigar fallos.
+
+`KAFKA_BOOTSTRAP_SERVERS` toma `localhost:9092,localhost:9093,localhost:9094` con Maven y los tres nombres
+internos en Compose. `spring.kafka.producer` centraliza `StringSerializer`, `JsonSerializer`, idempotencia,
+compresion lz4, `linger.ms=10`, `delivery.timeout.ms=30000`, `request.timeout.ms=15000`,
+`max.block.ms=5000` y ausencia de headers de tipo. El request timeout deja margen dentro del delivery timeout.
+
+Desde la raiz, levantar tambien catalog para que declare el topico de stock que consume report:
+
+```sh
+docker compose --env-file frontend/.env --env-file .env up --build -d orders catalog report
+```
+
+`mvn test` cubre los datos del evento, tipos y key del mapper, fallos del publisher y las pruebas existentes
+de negocio, seguridad y RabbitMQ.

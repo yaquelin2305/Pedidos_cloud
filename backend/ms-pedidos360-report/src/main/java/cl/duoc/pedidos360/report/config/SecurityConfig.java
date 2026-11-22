@@ -16,7 +16,7 @@ import cl.duoc.pedidos360.report.exception.RestAuthenticationEntryPoint;
  * Servicio de recursos OAuth2 sin sesion. El {@code JwtDecoder} autoconfigurado por Spring Boot
  * ya verifica firma (JWK del issuer), issuer, vigencia y audience a partir de
  * spring.security.oauth2.resourceserver.jwt.issuer-uri y .audiences. El controlador exige el rol
- * Admin con {@code @PreAuthorize}: la bitacora expone acciones de todos los usuarios.
+ * Admin u Operator con {@code @PreAuthorize} para las consultas de reportes.
  */
 @Configuration
 @EnableMethodSecurity
