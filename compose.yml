@@ -93,12 +93,19 @@ services:
       RABBITMQ_ADDRESSES: rabbitmq-1:5672,rabbitmq-2:5672
       RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:?Define RABBITMQ_USERNAME}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Define RABBITMQ_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:29092,kafka-2:29092,kafka-3:29092
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq-1:
         condition: service_healthy
       rabbitmq-2:
+        condition: service_healthy
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
         condition: service_healthy
 
   mq-admin:
