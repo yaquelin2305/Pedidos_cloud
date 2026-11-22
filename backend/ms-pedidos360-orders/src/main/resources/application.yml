@@ -1,6 +1,23 @@
 spring:
   application:
     name: ms-pedidos360-orders
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092,localhost:9093,localhost:9094}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      # Con min.insync.replicas=2 el envio no se confirma hasta que una segunda replica lo tiene.
+      acks: all
+      compression-type: lz4
+      properties:
+        enable.idempotence: true
+        linger.ms: 10
+        delivery.timeout.ms: 30000
+        # Kafka exige delivery.timeout.ms >= linger.ms + request.timeout.ms (por defecto 30000).
+        request.timeout.ms: 15000
+        # Con los brokers caidos, el envio no bloquea el hilo HTTP mas de 5 s.
+        max.block.ms: 5000
+        spring.json.add.type.headers: false
   rabbitmq:
     addresses: ${RABBITMQ_ADDRESSES:localhost:5672}
     username: ${RABBITMQ_USERNAME}
@@ -55,3 +72,21 @@ pedidos360:
       DESPACHADO: order.dispatched
       ENTREGADO: order.delivered
       CANCELADO: order.cancelled
+  streaming:
+    topics:
+      order-events:
+        name: pedidos360.orders.events
+        partitions: 3
+        replicas: 3
+        configs:
+          "[cleanup.policy]": delete
+          "[min.insync.replicas]": "2"
+          "[retention.ms]": "604800000"
+      order-events-dead-letter:
+        name: pedidos360.orders.events.DLT
+        partitions: 3
+        replicas: 3
+        configs:
+          "[cleanup.policy]": delete
+          "[min.insync.replicas]": "2"
+          "[retention.ms]": "1209600000"
